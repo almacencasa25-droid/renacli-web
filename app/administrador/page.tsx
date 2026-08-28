@@ -1,20 +1,52 @@
 import crypto from "crypto"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { createClient } from "@supabase/supabase-js"
 
 const COOKIE_NAME = "renacli_admin_session"
 
 function obtenerTokenAdministrador() {
   const password = process.env.RENACLI_ADMIN_PASSWORD
 
-  if (!password) {
-    return null
-  }
+  if (!password) return null
 
   return crypto
     .createHash("sha256")
     .update(password)
     .digest("hex")
+}
+
+function obtenerSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const secret = process.env.SUPABASE_SECRET_KEY
+
+  if (!url || !secret) {
+    throw new Error(
+      "Falta configurar Supabase para el administrador."
+    )
+  }
+
+  return createClient(url, secret, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  })
+}
+
+async function estaAutorizado() {
+  const cookieStore = await cookies()
+
+  const tokenGuardado =
+    cookieStore.get(COOKIE_NAME)?.value
+
+  const tokenCorrecto =
+    obtenerTokenAdministrador()
+
+  return (
+    Boolean(tokenCorrecto) &&
+    tokenGuardado === tokenCorrecto
+  )
 }
 
 async function iniciarSesion(formData: FormData) {
@@ -64,9 +96,132 @@ async function cerrarSesion() {
   redirect("/administrador")
 }
 
+async function crearMatriculado(formData: FormData) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const apellidoNombre = String(
+    formData.get("apellido_nombre") ?? ""
+  ).trim()
+
+  const dni = String(
+    formData.get("dni") ?? ""
+  ).trim()
+
+  const especialidad = String(
+    formData.get("especialidad") ?? ""
+  ).trim()
+
+  const localidad = String(
+    formData.get("localidad") ?? ""
+  ).trim()
+
+  const provincia = String(
+    formData.get("provincia") ?? ""
+  ).trim()
+
+  const telefono = String(
+    formData.get("telefono") ?? ""
+  ).trim()
+
+  const fechaEmision = String(
+    formData.get("fecha_emision") ?? ""
+  ).trim()
+
+  const fechaVencimiento = String(
+    formData.get("fecha_vencimiento") ?? ""
+  ).trim()
+
+  if (
+    !apellidoNombre ||
+    !dni ||
+    !especialidad ||
+    !localidad ||
+    !provincia ||
+    !fechaEmision ||
+    !fechaVencimiento
+  ) {
+    redirect(
+      "/administrador?nuevo=1&error=campos"
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { data: existente } = await supabase
+    .from("matriculados")
+    .select("id")
+    .eq("dni", dni)
+    .maybeSingle()
+
+  if (existente) {
+    redirect(
+      "/administrador?nuevo=1&error=dni"
+    )
+  }
+
+  const { data, error } = await supabase
+    .from("matriculados")
+    .insert({
+      apellido_nombre: apellidoNombre,
+      dni,
+      especialidad,
+      localidad,
+      provincia,
+      telefono,
+      fecha_emision: fechaEmision,
+      fecha_vencimiento: fechaVencimiento,
+      estado: "vigente",
+    })
+    .select("id")
+    .single()
+
+  if (error || !data) {
+    console.error(
+      "[RENACLI] Error creando matriculado:",
+      error
+    )
+
+    redirect(
+      "/administrador?nuevo=1&error=guardar"
+    )
+  }
+
+  const { data: numeroRnc, error: errorRnc } =
+    await supabase.rpc(
+      "asignar_matricula_rnc",
+      {
+        p_matriculado_id: data.id,
+      }
+    )
+
+  if (errorRnc || !numeroRnc) {
+    console.error(
+      "[RENACLI] Error generando RNC:",
+      errorRnc
+    )
+
+    redirect(
+      `/administrador?error=rnc&id=${data.id}`
+    )
+  }
+
+  redirect(
+    `/administrador?creado=1&rnc=${encodeURIComponent(
+      String(numeroRnc)
+    )}`
+  )
+}
+
 type Props = {
   searchParams?: Promise<{
     error?: string
+    nuevo?: string
+    creado?: string
+    rnc?: string
   }>
 }
 
@@ -77,17 +232,8 @@ export default async function AdministradorPage({
     ? await searchParams
     : {}
 
-  const cookieStore = await cookies()
-
-  const tokenGuardado =
-    cookieStore.get(COOKIE_NAME)?.value
-
-  const tokenCorrecto =
-    obtenerTokenAdministrador()
-
   const autorizado =
-    Boolean(tokenCorrecto) &&
-    tokenGuardado === tokenCorrecto
+    await estaAutorizado()
 
   if (!autorizado) {
     return (
@@ -115,11 +261,7 @@ export default async function AdministradorPage({
             RENACLI
           </h1>
 
-          <p
-            style={{
-              margin: "6px 0 0",
-            }}
-          >
+          <p style={{ margin: "6px 0 0" }}>
             Registro Nacional de Climatización y
             Refrigeración
           </p>
@@ -167,44 +309,38 @@ export default async function AdministradorPage({
             <p
               style={{
                 color: "#64748b",
-                marginBottom: "25px",
                 lineHeight: 1.5,
               }}
             >
               Ingrese la contraseña de administrador
-              para acceder a la gestión de matrículas
-              RENACLI.
+              para acceder a la gestión de matrículas.
             </p>
 
-            {parametros?.error === "incorrecta" && (
-              <div
+            {parametros.error === "incorrecta" && (
+              <p
                 style={{
-                  background: "#fff1f2",
-                  border: "1px solid #fecdd3",
                   color: "#be123c",
+                  background: "#fff1f2",
+                  padding: "12px",
                   borderRadius: "8px",
-                  padding: "12px 14px",
-                  marginBottom: "20px",
                 }}
               >
                 Contraseña incorrecta.
-              </div>
+              </p>
             )}
 
-            {parametros?.error === "config" && (
-              <div
+            {parametros.error === "config" && (
+              <p
                 style={{
-                  background: "#fff7ed",
-                  border: "1px solid #fed7aa",
                   color: "#c2410c",
+                  background: "#fff7ed",
+                  padding: "12px",
                   borderRadius: "8px",
-                  padding: "12px 14px",
-                  marginBottom: "20px",
                 }}
               >
-                La contraseña de administración no
-                está configurada correctamente.
-              </div>
+                La contraseña administrativa no está
+                configurada.
+              </p>
             )}
 
             <form action={iniciarSesion}>
@@ -212,9 +348,8 @@ export default async function AdministradorPage({
                 htmlFor="password"
                 style={{
                   display: "block",
-                  color: "#334155",
-                  fontWeight: "bold",
                   marginBottom: "8px",
+                  fontWeight: "bold",
                 }}
               >
                 Contraseña
@@ -225,8 +360,6 @@ export default async function AdministradorPage({
                 name="password"
                 type="password"
                 required
-                autoComplete="current-password"
-                placeholder="Ingrese su contraseña"
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
@@ -242,13 +375,13 @@ export default async function AdministradorPage({
                 type="submit"
                 style={{
                   width: "100%",
-                  padding: "14px 20px",
-                  border: "none",
+                  padding: "14px",
+                  border: 0,
                   borderRadius: "8px",
                   background: "#0d5689",
                   color: "white",
-                  fontWeight: "bold",
                   fontSize: "16px",
+                  fontWeight: "bold",
                   cursor: "pointer",
                 }}
               >
@@ -260,6 +393,9 @@ export default async function AdministradorPage({
       </main>
     )
   }
+
+  const mostrarNuevo =
+    parametros.nuevo === "1"
 
   return (
     <main
@@ -292,11 +428,7 @@ export default async function AdministradorPage({
             RENACLI
           </h1>
 
-          <p
-            style={{
-              margin: "6px 0 0",
-            }}
-          >
+          <p style={{ margin: "6px 0 0" }}>
             Registro Nacional de Climatización y
             Refrigeración
           </p>
@@ -309,7 +441,7 @@ export default async function AdministradorPage({
               padding: "10px 16px",
               borderRadius: "8px",
               border:
-                "1px solid rgba(255,255,255,0.5)",
+                "1px solid rgba(255,255,255,.5)",
               background: "transparent",
               color: "white",
               fontWeight: "bold",
@@ -352,84 +484,294 @@ export default async function AdministradorPage({
         <p
           style={{
             color: "#64748b",
-            marginBottom: "35px",
+            marginBottom: "30px",
           }}
         >
           Gestión interna de matrículas RENACLI.
         </p>
 
-        <div
-          style={{
-            background: "white",
-            border: "1px solid #d7e0e7",
-            borderRadius: "14px",
-            padding: "30px",
-            boxShadow:
-              "0 2px 5px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h3
-            style={{
-              marginTop: 0,
-              color: "#172033",
-            }}
-          >
-            Gestión de matrículas
-          </h3>
+        {parametros.creado === "1" &&
+          parametros.rnc && (
+            <div
+              style={{
+                background: "#ecfdf5",
+                border: "1px solid #86efac",
+                color: "#166534",
+                borderRadius: "10px",
+                padding: "18px",
+                marginBottom: "25px",
+              }}
+            >
+              Matriculado creado correctamente.
+              Matrícula asignada:{" "}
+              <strong>{parametros.rnc}</strong>
+            </div>
+          )}
 
-          <p
-            style={{
-              color: "#64748b",
-              lineHeight: 1.5,
-            }}
-          >
-            Desde este panel se podrán registrar
-            técnicos, asignar matrículas RNC,
-            consultar matriculados y gestionar altas
-            y bajas.
-          </p>
-
+        {parametros.error === "rnc" && (
           <div
             style={{
-              display: "flex",
-              gap: "15px",
-              flexWrap: "wrap",
-              marginTop: "25px",
+              background: "#fff7ed",
+              border: "1px solid #fdba74",
+              color: "#9a3412",
+              borderRadius: "10px",
+              padding: "18px",
+              marginBottom: "25px",
             }}
           >
-            <button
-              type="button"
-              style={{
-                padding: "14px 22px",
-                border: "none",
-                borderRadius: "8px",
-                background: "#0d5689",
-                color: "white",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
-              + Nuevo matriculado
-            </button>
-
-            <button
-              type="button"
-              style={{
-                padding: "14px 22px",
-                border:
-                  "1px solid #cbd5e1",
-                borderRadius: "8px",
-                background: "white",
-                color: "#334155",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
-              Buscar matriculado
-            </button>
+            El matriculado fue creado, pero ocurrió
+            un problema al generar la matrícula RNC.
           </div>
-        </div>
+        )}
+
+        {!mostrarNuevo ? (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #d7e0e7",
+              borderRadius: "14px",
+              padding: "30px",
+              boxShadow:
+                "0 2px 5px rgba(0,0,0,.08)",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>
+              Gestión de matrículas
+            </h3>
+
+            <p style={{ color: "#64748b" }}>
+              Registre técnicos, asigne matrículas
+              RNC y gestione altas y bajas.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "15px",
+                flexWrap: "wrap",
+                marginTop: "25px",
+              }}
+            >
+              <a
+                href="/administrador?nuevo=1"
+                style={{
+                  padding: "14px 22px",
+                  borderRadius: "8px",
+                  background: "#0d5689",
+                  color: "white",
+                  fontWeight: "bold",
+                  textDecoration: "none",
+                }}
+              >
+                + Nuevo matriculado
+              </a>
+
+              <button
+                type="button"
+                style={{
+                  padding: "14px 22px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  background: "white",
+                  color: "#334155",
+                  fontWeight: "bold",
+                }}
+              >
+                Buscar matriculado
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #d7e0e7",
+              borderRadius: "14px",
+              padding: "30px",
+              boxShadow:
+                "0 2px 5px rgba(0,0,0,.08)",
+            }}
+          >
+            <h3
+              style={{
+                marginTop: 0,
+                fontSize: "24px",
+              }}
+            >
+              Nuevo matriculado
+            </h3>
+
+            <p style={{ color: "#64748b" }}>
+              Al guardar, RENACLI asignará
+              automáticamente una matrícula
+              RNC-XXXXXX única.
+            </p>
+
+            {parametros.error === "campos" && (
+              <p style={{ color: "#b91c1c" }}>
+                Complete todos los campos
+                obligatorios.
+              </p>
+            )}
+
+            {parametros.error === "dni" && (
+              <p style={{ color: "#b91c1c" }}>
+                Ya existe un matriculado registrado
+                con ese DNI.
+              </p>
+            )}
+
+            {parametros.error === "guardar" && (
+              <p style={{ color: "#b91c1c" }}>
+                No fue posible guardar el
+                matriculado.
+              </p>
+            )}
+
+            <form action={crearMatriculado}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(260px,1fr))",
+                  gap: "20px",
+                  marginTop: "25px",
+                }}
+              >
+                <Campo
+                  nombre="apellido_nombre"
+                  etiqueta="Apellido y nombre"
+                  requerido
+                />
+
+                <Campo
+                  nombre="dni"
+                  etiqueta="DNI"
+                  requerido
+                />
+
+                <Campo
+                  nombre="especialidad"
+                  etiqueta="Especialidad"
+                  requerido
+                />
+
+                <Campo
+                  nombre="telefono"
+                  etiqueta="Teléfono"
+                />
+
+                <Campo
+                  nombre="localidad"
+                  etiqueta="Localidad"
+                  requerido
+                />
+
+                <Campo
+                  nombre="provincia"
+                  etiqueta="Provincia"
+                  requerido
+                />
+
+                <Campo
+                  nombre="fecha_emision"
+                  etiqueta="Fecha de emisión"
+                  tipo="date"
+                  requerido
+                />
+
+                <Campo
+                  nombre="fecha_vencimiento"
+                  etiqueta="Fecha de vencimiento"
+                  tipo="date"
+                  requerido
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "15px",
+                  marginTop: "30px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="submit"
+                  style={{
+                    padding: "14px 25px",
+                    border: 0,
+                    borderRadius: "8px",
+                    background: "#0d5689",
+                    color: "white",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Guardar y generar matrícula
+                </button>
+
+                <a
+                  href="/administrador"
+                  style={{
+                    padding: "14px 25px",
+                    border:
+                      "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    color: "#334155",
+                    textDecoration: "none",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Cancelar
+                </a>
+              </div>
+            </form>
+          </div>
+        )}
       </section>
     </main>
+  )
+}
+
+function Campo({
+  nombre,
+  etiqueta,
+  tipo = "text",
+  requerido = false,
+}: {
+  nombre: string
+  etiqueta: string
+  tipo?: string
+  requerido?: boolean
+}) {
+  return (
+    <label
+      style={{
+        display: "block",
+        color: "#334155",
+        fontWeight: "bold",
+      }}
+    >
+      {etiqueta}
+      {requerido ? " *" : ""}
+
+      <input
+        name={nombre}
+        type={tipo}
+        required={requerido}
+        style={{
+          display: "block",
+          width: "100%",
+          boxSizing: "border-box",
+          marginTop: "8px",
+          padding: "13px",
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          fontSize: "16px",
+          fontWeight: "normal",
+        }}
+      />
+    </label>
   )
 }
