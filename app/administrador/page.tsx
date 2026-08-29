@@ -561,6 +561,81 @@ function formatearFecha(
   return `${partes[2]}/${partes[1]}/${partes[0]}`
 }
 
+function fechaHoyArgentina() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+function estadoEfectivo(
+  matriculado: MatriculadoAdmin
+) {
+  const estadoBase = (
+    matriculado.estado || ""
+  ).toLowerCase()
+
+  if (estadoBase.includes("baja")) {
+    return "baja"
+  }
+
+  if (estadoBase.includes("suspend")) {
+    return "suspendida"
+  }
+
+  if (
+    matriculado.fecha_vencimiento &&
+    matriculado.fecha_vencimiento.slice(0, 10) <
+      fechaHoyArgentina()
+  ) {
+    return "vencida"
+  }
+
+  return "vigente"
+}
+
+function diasHastaVencimiento(
+  fecha: string | null
+) {
+  if (!fecha) return null
+
+  const hoy = new Date(
+    `${fechaHoyArgentina()}T00:00:00`
+  )
+  const vencimiento = new Date(
+    `${fecha.slice(0, 10)}T00:00:00`
+  )
+
+  return Math.ceil(
+    (vencimiento.getTime() - hoy.getTime()) /
+      86400000
+  )
+}
+
+async function obtenerTodosMatriculados():
+  Promise<MatriculadoAdmin[]> {
+  const supabase = obtenerSupabaseAdmin()
+
+  const { data, error } = await supabase
+    .from("matriculados")
+    .select("*")
+    .order("apellido_nombre", {
+      ascending: true,
+    })
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error obteniendo listado:",
+      error
+    )
+    return []
+  }
+
+  return (data ?? []) as MatriculadoAdmin[]
+}
+
 type Props = {
   searchParams?: Promise<{
     error?: string
@@ -573,6 +648,7 @@ type Props = {
     baja?: string
     mensaje?: string
     liberado?: string
+    listado?: string
   }>
 }
 
@@ -757,6 +833,67 @@ export default async function AdministradorPage({
         terminoBusqueda
       )
   }
+
+  const todosMatriculados =
+    await obtenerTodosMatriculados()
+
+  const vigentes = todosMatriculados.filter(
+    m => estadoEfectivo(m) === "vigente"
+  )
+  const vencidas = todosMatriculados.filter(
+    m => estadoEfectivo(m) === "vencida"
+  )
+  const suspendidas = todosMatriculados.filter(
+    m => estadoEfectivo(m) === "suspendida"
+  )
+  const bajas = todosMatriculados.filter(
+    m => estadoEfectivo(m) === "baja"
+  )
+  const proximasAVencer =
+    todosMatriculados.filter(m => {
+      if (estadoEfectivo(m) !== "vigente") {
+        return false
+      }
+      const dias =
+        diasHastaVencimiento(
+          m.fecha_vencimiento
+        )
+      return (
+        dias !== null &&
+        dias >= 0 &&
+        dias <= 30
+      )
+    })
+
+  const listado = String(
+    parametros.listado ?? ""
+  )
+
+  const matriculadosListado =
+    listado === "vigentes"
+      ? vigentes
+      : listado === "vencidas"
+        ? vencidas
+        : listado === "suspendidas"
+          ? suspendidas
+          : listado === "bajas"
+            ? bajas
+            : listado === "proximas"
+              ? proximasAVencer
+              : []
+
+  const tituloListado =
+    listado === "vigentes"
+      ? "Matrículas vigentes"
+      : listado === "vencidas"
+        ? "Matrículas vencidas"
+        : listado === "suspendidas"
+          ? "Matrículas suspendidas"
+          : listado === "bajas"
+            ? "Matrículas dadas de baja"
+            : listado === "proximas"
+              ? "Próximas a vencer (30 días)"
+              : ""
 
   return (
     <main
@@ -1203,10 +1340,9 @@ export default async function AdministradorPage({
             {resultados.map(
               matriculado => {
                 const estado =
-                  (
-                    matriculado.estado ||
-                    ""
-                  ).toLowerCase()
+                  estadoEfectivo(
+                    matriculado
+                  )
 
                 const suspendida =
                   estado.includes(
@@ -1262,7 +1398,9 @@ export default async function AdministradorPage({
                       <Dato
                         titulo="Estado"
                         valor={
-                          matriculado.estado
+                          estadoEfectivo(
+                            matriculado
+                          )
                         }
                       />
 
@@ -1475,33 +1613,160 @@ export default async function AdministradorPage({
             )}
           </>
         ) : (
-          <div style={tarjeta}>
-            <h3>
-              Gestión de matrículas
-            </h3>
+          <>
+            <div style={tarjeta}>
+              <h3>
+                Gestión de matrículas
+              </h3>
 
-            <p>
-              Registre técnicos,
-              consulte matrículas y
-              gestione estados.
-            </p>
+              <p>
+                El estado VENCIDA se calcula
+                automáticamente según la fecha de
+                vencimiento. Suspensión y baja
+                continúan siendo administrativas.
+              </p>
 
-            <div style={botonera}>
-              <a
-                href="/administrador?nuevo=1"
-                style={botonAzul}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(170px,1fr))",
+                  gap: "14px",
+                  marginTop: "24px",
+                }}
               >
-                + Nuevo matriculado
-              </a>
+                <Resumen
+                  titulo="Vigentes"
+                  cantidad={vigentes.length}
+                  href="/administrador?listado=vigentes"
+                />
+                <Resumen
+                  titulo="Vencidas"
+                  cantidad={vencidas.length}
+                  href="/administrador?listado=vencidas"
+                />
+                <Resumen
+                  titulo="Suspendidas"
+                  cantidad={suspendidas.length}
+                  href="/administrador?listado=suspendidas"
+                />
+                <Resumen
+                  titulo="Bajas"
+                  cantidad={bajas.length}
+                  href="/administrador?listado=bajas"
+                />
+                <Resumen
+                  titulo="Próximas a vencer"
+                  cantidad={proximasAVencer.length}
+                  href="/administrador?listado=proximas"
+                />
+              </div>
 
-              <a
-                href="/administrador?buscar=1"
-                style={botonBlanco}
-              >
-                Buscar matriculado
-              </a>
+              <div style={botonera}>
+                <a
+                  href="/administrador?nuevo=1"
+                  style={botonAzul}
+                >
+                  + Nuevo matriculado
+                </a>
+
+                <a
+                  href="/administrador?buscar=1"
+                  style={botonBlanco}
+                >
+                  Buscar matriculado
+                </a>
+              </div>
             </div>
-          </div>
+
+            {tituloListado && (
+              <div
+                style={{
+                  ...tarjeta,
+                  marginTop: "22px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <h3 style={{ margin: 0 }}>
+                    {tituloListado}
+                  </h3>
+                  <a
+                    href="/administrador"
+                    style={botonBlanco}
+                  >
+                    Cerrar listado
+                  </a>
+                </div>
+
+                {matriculadosListado.length === 0 ? (
+                  <p style={{ marginTop: "22px" }}>
+                    No hay registros en este listado.
+                  </p>
+                ) : (
+                  <div style={{ marginTop: "22px" }}>
+                    {matriculadosListado.map(m => (
+                      <div
+                        key={m.id}
+                        style={{
+                          padding: "16px 0",
+                          borderBottom:
+                            "1px solid #e2e8f0",
+                        }}
+                      >
+                        <strong>
+                          {m.apellido_nombre ||
+                            "Sin nombre"}
+                        </strong>
+                        <div
+                          style={{
+                            marginTop: "5px",
+                            color: "#475569",
+                          }}
+                        >
+                          {m.numero_matricula ||
+                            "SIN MATRÍCULA"}{" "}
+                          · Estado:{" "}
+                          {estadoEfectivo(m)} · Vence:{" "}
+                          {formatearFecha(
+                            m.fecha_vencimiento
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: "10px",
+                          }}
+                        >
+                          <a
+                            href={`/administrador?buscar=1&q=${encodeURIComponent(
+                              m.numero_matricula ||
+                                m.dni ||
+                                m.apellido_nombre ||
+                                ""
+                            )}`}
+                            style={{
+                              color: "#0d5689",
+                              fontWeight: "bold",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Ver / administrar
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
     </main>
@@ -1575,6 +1840,50 @@ function Dato({
         {valor || "-"}
       </div>
     </div>
+  )
+}
+
+function Resumen({
+  titulo,
+  cantidad,
+  href,
+}: {
+  titulo: string
+  cantidad: number
+  href: string
+}) {
+  return (
+    <a
+      href={href}
+      style={{
+        display: "block",
+        padding: "18px",
+        border: "1px solid #d7e0e7",
+        borderRadius: "10px",
+        background: "#f8fafc",
+        color: "#172033",
+        textDecoration: "none",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "13px",
+          color: "#64748b",
+          fontWeight: "bold",
+        }}
+      >
+        {titulo}
+      </div>
+      <div
+        style={{
+          fontSize: "30px",
+          fontWeight: "bold",
+          marginTop: "6px",
+        }}
+      >
+        {cantidad}
+      </div>
+    </a>
   )
 }
 
