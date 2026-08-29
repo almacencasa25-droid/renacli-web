@@ -342,6 +342,110 @@ async function editarMatriculado(
   )
 }
 
+async function renovarMatriculado(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  const fechaRenovacion = String(
+    formData.get("fecha_renovacion") ?? ""
+  ).trim()
+
+  const fechaVencimiento = String(
+    formData.get("fecha_vencimiento") ?? ""
+  ).trim()
+
+  const q = String(
+    formData.get("q") ?? ""
+  )
+
+  if (
+    !id ||
+    !fechaRenovacion ||
+    !fechaVencimiento
+  ) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=renovar`
+    )
+  }
+
+  if (fechaVencimiento < fechaRenovacion) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&renovar=${id}&error=fechas`
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const {
+    data: matriculado,
+    error: errorLectura,
+  } = await supabase
+    .from("matriculados")
+    .select(
+      "id, estado, numero_matricula, fecha_emision"
+    )
+    .eq("id", id)
+    .maybeSingle()
+
+  if (
+    errorLectura ||
+    !matriculado ||
+    !matriculado.numero_matricula ||
+    String(matriculado.estado || "")
+      .toLowerCase()
+      .includes("baja")
+  ) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=renovar`
+    )
+  }
+
+  const { error } = await supabase
+    .from("matriculados")
+    .update({
+      /*
+       * Conservamos fecha_emision como la fecha
+       * original de acreditación.
+       * La nueva vigencia se controla con
+       * fecha_vencimiento.
+       */
+      fecha_vencimiento: fechaVencimiento,
+    })
+    .eq("id", id)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error renovando matrícula:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=renovar`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=renovado`
+  )
+}
+
 async function cambiarEstado(
   formData: FormData
 ) {
@@ -570,6 +674,48 @@ function fechaHoyArgentina() {
   }).format(new Date())
 }
 
+function sumarUnAnio(
+  fecha: string | null
+) {
+  if (!fecha) return ""
+
+  const partes = fecha
+    .slice(0, 10)
+    .split("-")
+    .map(Number)
+
+  if (partes.length !== 3) return ""
+
+  const [anio, mes, dia] = partes
+
+  const fechaUtc = new Date(
+    Date.UTC(anio + 1, mes - 1, dia)
+  )
+
+  /*
+   * Si la fecha original es 29/02 y el año siguiente
+   * no es bisiesto, JavaScript salta a marzo.
+   * En ese caso usamos 28/02.
+   */
+  if (
+    mes === 2 &&
+    dia === 29 &&
+    fechaUtc.getUTCMonth() !== 1
+  ) {
+    return `${anio + 1}-02-28`
+  }
+
+  const nuevoAnio = fechaUtc.getUTCFullYear()
+  const nuevoMes = String(
+    fechaUtc.getUTCMonth() + 1
+  ).padStart(2, "0")
+  const nuevoDia = String(
+    fechaUtc.getUTCDate()
+  ).padStart(2, "0")
+
+  return `${nuevoAnio}-${nuevoMes}-${nuevoDia}`
+}
+
 function estadoEfectivo(
   matriculado: MatriculadoAdmin
 ) {
@@ -645,6 +791,7 @@ type Props = {
     buscar?: string
     q?: string
     editar?: string
+    renovar?: string
     baja?: string
     mensaje?: string
     liberado?: string
@@ -818,6 +965,19 @@ export default async function AdministradorPage({
     matriculadoEditar =
       await obtenerMatriculadoPorId(
         editarId
+      )
+  }
+
+  const renovarId =
+    Number(parametros.renovar ?? 0)
+
+  let matriculadoRenovar:
+    MatriculadoAdmin | null = null
+
+  if (renovarId) {
+    matriculadoRenovar =
+      await obtenerMatriculadoPorId(
+        renovarId
       )
   }
 
@@ -997,6 +1157,30 @@ export default async function AdministradorPage({
           <Aviso
             texto="Estado actualizado correctamente."
             tipo="ok"
+          />
+        )}
+
+        {parametros.mensaje ===
+          "renovado" && (
+          <Aviso
+            texto="Matrícula renovada correctamente. La nueva vigencia ya se calcula automáticamente."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "renovar" && (
+          <Aviso
+            texto="No fue posible renovar la matrícula."
+            tipo="error"
+          />
+        )}
+
+        {parametros.error ===
+          "fechas" && (
+          <Aviso
+            texto="La fecha de vencimiento no puede ser anterior a la fecha de acreditación."
+            tipo="error"
           />
         )}
 
@@ -1194,6 +1378,174 @@ export default async function AdministradorPage({
                     terminoBusqueda ||
                       matriculadoEditar.apellido_nombre ||
                       ""
+                  )}`}
+                  style={botonBlanco}
+                >
+                  Cancelar
+                </a>
+              </div>
+            </form>
+          </div>
+        ) : matriculadoRenovar ? (
+          <div style={tarjeta}>
+            <h3>Renovar matrícula</h3>
+
+            <p>
+              Técnico:{" "}
+              <strong>
+                {matriculadoRenovar.apellido_nombre ||
+                  "Sin nombre"}
+              </strong>
+            </p>
+
+            <p>
+              Matrícula:{" "}
+              <strong>
+                {matriculadoRenovar.numero_matricula ||
+                  "Sin matrícula"}
+              </strong>
+            </p>
+
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "16px",
+                background: "#f8fafc",
+                border: "1px solid #d7e0e7",
+                borderRadius: "9px",
+              }}
+            >
+              <div>
+                <strong>
+                  Fecha de acreditación original:
+                </strong>{" "}
+                {formatearFecha(
+                  matriculadoRenovar.fecha_emision
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop: "8px",
+                  color: "#64748b",
+                }}
+              >
+                Esta fecha original se conserva y no
+                se modifica al renovar.
+              </div>
+            </div>
+
+            <p
+              style={{
+                color: "#64748b",
+                marginTop: "22px",
+                marginBottom: "24px",
+              }}
+            >
+              El sistema propone automáticamente la
+              renovación desde la fecha en que vence
+              actualmente y calcula un año más. Si la
+              renovación se realiza más tarde, podés
+              modificar ambas fechas antes de
+              confirmar.
+            </p>
+
+            <form action={renovarMatriculado}>
+              <input
+                type="hidden"
+                name="id"
+                value={matriculadoRenovar.id}
+              />
+
+              <input
+                type="hidden"
+                name="q"
+                value={
+                  terminoBusqueda ||
+                  matriculadoRenovar.numero_matricula ||
+                  matriculadoRenovar.dni ||
+                  matriculadoRenovar.apellido_nombre ||
+                  ""
+                }
+              />
+
+              <div style={grilla}>
+                <Campo
+                  nombre="fecha_renovacion"
+                  etiqueta="Nueva fecha de renovación"
+                  tipo="date"
+                  valor={
+                    matriculadoRenovar.fecha_vencimiento ||
+                    fechaHoyArgentina()
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="fecha_vencimiento"
+                  etiqueta="Nuevo vencimiento (+ 1 año)"
+                  tipo="date"
+                  valor={sumarUnAnio(
+                    matriculadoRenovar.fecha_vencimiento ||
+                      fechaHoyArgentina()
+                  )}
+                  requerido
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "14px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "9px",
+                  color: "#1e3a8a",
+                }}
+              >
+                Las fechas aparecen precargadas para
+                una renovación anual. Si hubo demora,
+                simplemente cambialas antes de guardar.
+              </div>
+
+              {(
+                matriculadoRenovar.estado || ""
+              )
+                .toLowerCase()
+                .includes("suspend") && (
+                <div
+                  style={{
+                    marginTop: "20px",
+                    padding: "15px",
+                    background: "#fffbeb",
+                    border:
+                      "1px solid #fde68a",
+                    borderRadius: "9px",
+                    color: "#92400e",
+                  }}
+                >
+                  Esta matrícula está suspendida.
+                  Podés renovar la vigencia, pero
+                  continuará SUSPENDIDA hasta que la
+                  rehabilites desde administración.
+                </div>
+              )}
+
+              <div style={botonera}>
+                <button
+                  type="submit"
+                  style={botonVerde}
+                >
+                  Confirmar renovación
+                </button>
+
+                <a
+                  href={`/administrador?buscar=1&q=${encodeURIComponent(
+                    terminoBusqueda ||
+                    matriculadoRenovar.numero_matricula ||
+                    matriculadoRenovar.dni ||
+                    matriculadoRenovar.apellido_nombre ||
+                    ""
                   )}`}
                   style={botonBlanco}
                 >
@@ -1462,6 +1814,17 @@ export default async function AdministradorPage({
                           }
                         >
                           Editar
+                        </a>
+
+                        <a
+                          href={`/administrador?buscar=1&q=${encodeURIComponent(
+                            terminoBusqueda
+                          )}&renovar=${
+                            matriculado.id
+                          }`}
+                          style={botonVerde}
+                        >
+                          Renovar matrícula
                         </a>
 
                         <form
@@ -1742,6 +2105,9 @@ export default async function AdministradorPage({
                         <div
                           style={{
                             marginTop: "10px",
+                            display: "flex",
+                            gap: "10px",
+                            flexWrap: "wrap",
                           }}
                         >
                           <a
@@ -1759,6 +2125,23 @@ export default async function AdministradorPage({
                           >
                             Ver / administrar
                           </a>
+
+                          {estadoEfectivo(m) !== "baja" && (
+                            <a
+                              href={`/administrador?renovar=${m.id}&q=${encodeURIComponent(
+                                m.numero_matricula ||
+                                  m.dni ||
+                                  m.apellido_nombre ||
+                                  ""
+                              )}`}
+                              style={{
+                                ...botonVerde,
+                                padding: "8px 12px",
+                              }}
+                            >
+                              Renovar matrícula
+                            </a>
+                          )}
                         </div>
                       </div>
                     ))}
