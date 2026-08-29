@@ -235,6 +235,243 @@ async function crearMatriculado(formData: FormData) {
   )
 }
 
+async function editarMatriculado(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  const apellidoNombre = String(
+    formData.get("apellido_nombre") ?? ""
+  ).trim()
+
+  const dni = String(
+    formData.get("dni") ?? ""
+  ).trim()
+
+  const telefono = String(
+    formData.get("telefono") ?? ""
+  ).trim()
+
+  const email = String(
+    formData.get("email") ?? ""
+  ).trim()
+
+  const domicilio = String(
+    formData.get("domicilio") ?? ""
+  ).trim()
+
+  const localidad = String(
+    formData.get("localidad") ?? ""
+  ).trim()
+
+  const provincia = String(
+    formData.get("provincia") ?? ""
+  ).trim()
+
+  const especialidad = String(
+    formData.get("especialidad") ?? ""
+  ).trim()
+
+  const fechaEmision = String(
+    formData.get("fecha_emision") ?? ""
+  ).trim()
+
+  const fechaVencimiento = String(
+    formData.get("fecha_vencimiento") ?? ""
+  ).trim()
+
+  const observaciones = String(
+    formData.get("observaciones") ?? ""
+  ).trim()
+
+  if (
+    !id ||
+    !apellidoNombre ||
+    !dni ||
+    !especialidad ||
+    !localidad ||
+    !provincia
+  ) {
+    redirect(
+      "/administrador?error=editar"
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { error } = await supabase
+    .from("matriculados")
+    .update({
+      apellido_nombre: apellidoNombre,
+      dni,
+      telefono,
+      email,
+      domicilio,
+      localidad,
+      provincia,
+      especialidad,
+      fecha_emision:
+        fechaEmision || null,
+      fecha_vencimiento:
+        fechaVencimiento || null,
+      observaciones,
+    })
+    .eq("id", id)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error editando matriculado:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&error=editar`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      apellidoNombre
+    )}&mensaje=editado`
+  )
+}
+
+async function cambiarEstado(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+  const estado = String(
+    formData.get("estado") ?? ""
+  )
+
+  const q = String(
+    formData.get("q") ?? ""
+  )
+
+  if (
+    !id ||
+    !["vigente", "suspendida"].includes(
+      estado
+    )
+  ) {
+    redirect("/administrador")
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { error } = await supabase
+    .from("matriculados")
+    .update({
+      estado,
+    })
+    .eq("id", id)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error cambiando estado:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=estado`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=estado`
+  )
+}
+
+async function darDeBaja(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  const q = String(
+    formData.get("q") ?? ""
+  )
+
+  if (!id) {
+    redirect("/administrador")
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const {
+    data: liberado,
+    error: errorLiberar,
+  } = await supabase.rpc(
+    "liberar_matricula_rnc",
+    {
+      p_matriculado_id: id,
+    }
+  )
+
+  if (errorLiberar) {
+    console.error(
+      "[RENACLI] Error liberando RNC:",
+      errorLiberar
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=baja`
+    )
+  }
+
+  const { error: errorEstado } =
+    await supabase
+      .from("matriculados")
+      .update({
+        estado: "baja",
+      })
+      .eq("id", id)
+
+  if (errorEstado) {
+    console.error(
+      "[RENACLI] Error marcando baja:",
+      errorEstado
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=baja`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=baja&liberado=${
+      liberado ? "1" : "0"
+    }`
+  )
+}
+
 async function buscarMatriculados(
   termino: string
 ): Promise<MatriculadoAdmin[]> {
@@ -291,10 +528,31 @@ async function buscarMatriculados(
   return (data ?? []) as MatriculadoAdmin[]
 }
 
-function formatearFecha(fecha: string | null) {
+async function obtenerMatriculadoPorId(
+  id: number
+): Promise<MatriculadoAdmin | null> {
+  const supabase = obtenerSupabaseAdmin()
+
+  const { data, error } = await supabase
+    .from("matriculados")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (error || !data) {
+    return null
+  }
+
+  return data as MatriculadoAdmin
+}
+
+function formatearFecha(
+  fecha: string | null
+) {
   if (!fecha) return "-"
 
-  const partes = fecha.slice(0, 10).split("-")
+  const partes =
+    fecha.slice(0, 10).split("-")
 
   if (partes.length !== 3) {
     return fecha
@@ -311,6 +569,10 @@ type Props = {
     rnc?: string
     buscar?: string
     q?: string
+    editar?: string
+    baja?: string
+    mensaje?: string
+    liberado?: string
   }>
 }
 
@@ -330,7 +592,8 @@ export default async function AdministradorPage({
         style={{
           minHeight: "100vh",
           background: "#eef5fa",
-          fontFamily: "Arial, sans-serif",
+          fontFamily:
+            "Arial, sans-serif",
         }}
       >
         <header
@@ -338,7 +601,8 @@ export default async function AdministradorPage({
             background: "#0d4f7c",
             color: "white",
             padding: "25px 40px",
-            borderBottom: "4px solid #35c4cf",
+            borderBottom:
+              "4px solid #35c4cf",
           }}
         >
           <h1
@@ -350,9 +614,13 @@ export default async function AdministradorPage({
             RENACLI
           </h1>
 
-          <p style={{ margin: "6px 0 0" }}>
-            Registro Nacional de Climatización y
-            Refrigeración
+          <p
+            style={{
+              margin: "6px 0 0",
+            }}
+          >
+            Registro Nacional de
+            Climatización y Refrigeración
           </p>
         </header>
 
@@ -366,7 +634,8 @@ export default async function AdministradorPage({
           <div
             style={{
               background: "white",
-              border: "1px solid #d7e0e7",
+              border:
+                "1px solid #d7e0e7",
               borderRadius: "14px",
               padding: "32px",
               boxShadow:
@@ -387,75 +656,48 @@ export default async function AdministradorPage({
             <h2
               style={{
                 marginTop: "8px",
-                marginBottom: "8px",
                 color: "#172033",
-                fontSize: "28px",
               }}
             >
               Administración
             </h2>
 
-            <p
-              style={{
-                color: "#64748b",
-                lineHeight: 1.5,
-              }}
-            >
-              Ingrese la contraseña de administrador
-              para acceder a la gestión de matrículas.
-            </p>
-
-            {parametros.error === "incorrecta" && (
+            {parametros.error ===
+              "incorrecta" && (
               <p
                 style={{
                   color: "#be123c",
-                  background: "#fff1f2",
-                  padding: "12px",
-                  borderRadius: "8px",
                 }}
               >
                 Contraseña incorrecta.
               </p>
             )}
 
-            {parametros.error === "config" && (
-              <p
-                style={{
-                  color: "#c2410c",
-                  background: "#fff7ed",
-                  padding: "12px",
-                  borderRadius: "8px",
-                }}
-              >
-                La contraseña administrativa no está
-                configurada.
-              </p>
-            )}
-
-            <form action={iniciarSesion}>
+            <form
+              action={iniciarSesion}
+            >
               <label
-                htmlFor="password"
                 style={{
                   display: "block",
-                  marginBottom: "8px",
                   fontWeight: "bold",
+                  marginBottom: "8px",
                 }}
               >
                 Contraseña
               </label>
 
               <input
-                id="password"
                 name="password"
                 type="password"
                 required
                 style={{
                   width: "100%",
-                  boxSizing: "border-box",
+                  boxSizing:
+                    "border-box",
                   padding: "14px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "16px",
+                  border:
+                    "1px solid #cbd5e1",
                   marginBottom: "18px",
                 }}
               />
@@ -469,9 +711,7 @@ export default async function AdministradorPage({
                   borderRadius: "8px",
                   background: "#0d5689",
                   color: "white",
-                  fontSize: "16px",
                   fontWeight: "bold",
-                  cursor: "pointer",
                 }}
               >
                 Ingresar
@@ -492,7 +732,21 @@ export default async function AdministradorPage({
   const terminoBusqueda =
     String(parametros.q ?? "").trim()
 
-  let resultados: MatriculadoAdmin[] = []
+  const editarId =
+    Number(parametros.editar ?? 0)
+
+  let matriculadoEditar:
+    MatriculadoAdmin | null = null
+
+  if (editarId) {
+    matriculadoEditar =
+      await obtenerMatriculadoPorId(
+        editarId
+      )
+  }
+
+  let resultados:
+    MatriculadoAdmin[] = []
 
   if (
     mostrarBusqueda &&
@@ -509,7 +763,8 @@ export default async function AdministradorPage({
       style={{
         minHeight: "100vh",
         background: "#eef5fa",
-        fontFamily: "Arial, sans-serif",
+        fontFamily:
+          "Arial, sans-serif",
       }}
     >
       <header
@@ -517,11 +772,12 @@ export default async function AdministradorPage({
           background: "#0d4f7c",
           color: "white",
           padding: "25px 40px",
-          borderBottom: "4px solid #35c4cf",
+          borderBottom:
+            "4px solid #35c4cf",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent:
+            "space-between",
           alignItems: "center",
-          gap: "20px",
           flexWrap: "wrap",
         }}
       >
@@ -535,9 +791,13 @@ export default async function AdministradorPage({
             RENACLI
           </h1>
 
-          <p style={{ margin: "6px 0 0" }}>
-            Registro Nacional de Climatización y
-            Refrigeración
+          <p
+            style={{
+              margin: "6px 0 0",
+            }}
+          >
+            Registro Nacional de
+            Climatización y Refrigeración
           </p>
         </div>
 
@@ -548,11 +808,11 @@ export default async function AdministradorPage({
               padding: "10px 16px",
               borderRadius: "8px",
               border:
-                "1px solid rgba(255,255,255,.5)",
-              background: "transparent",
+                "1px solid white",
+              background:
+                "transparent",
               color: "white",
               fontWeight: "bold",
-              cursor: "pointer",
             }}
           >
             Cerrar sesión
@@ -581,173 +841,243 @@ export default async function AdministradorPage({
         <h2
           style={{
             fontSize: "32px",
-            marginBottom: "8px",
             color: "#172033",
           }}
         >
           Panel de matriculados
         </h2>
 
-        <p
-          style={{
-            color: "#64748b",
-            marginBottom: "30px",
-          }}
-        >
-          Gestión interna de matrículas RENACLI.
-        </p>
-
-        {parametros.creado === "1" &&
-          parametros.rnc && (
-            <div
-              style={{
-                background: "#ecfdf5",
-                border: "1px solid #86efac",
-                color: "#166534",
-                borderRadius: "10px",
-                padding: "18px",
-                marginBottom: "25px",
-              }}
-            >
-              Matriculado creado correctamente.
-              Matrícula asignada:{" "}
-              <strong>
-                {parametros.rnc}
-              </strong>
-            </div>
-          )}
-
-        {parametros.error === "rnc" && (
-          <div
-            style={{
-              background: "#fff7ed",
-              border: "1px solid #fdba74",
-              color: "#9a3412",
-              borderRadius: "10px",
-              padding: "18px",
-              marginBottom: "25px",
-            }}
-          >
-            El matriculado fue creado, pero ocurrió
-            un problema al generar la matrícula RNC.
-          </div>
+        {parametros.mensaje ===
+          "editado" && (
+          <Aviso
+            texto="Datos actualizados correctamente."
+            tipo="ok"
+          />
         )}
 
-        {!mostrarNuevo &&
-        !mostrarBusqueda ? (
+        {parametros.mensaje ===
+          "estado" && (
+          <Aviso
+            texto="Estado actualizado correctamente."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.mensaje ===
+          "baja" && (
+          <Aviso
+            texto={
+              parametros.liberado === "1"
+                ? "Matrícula dada de baja. El número RNC quedó liberado y disponible para una futura asignación."
+                : "El matriculado fue dado de baja."
+            }
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "baja" && (
+          <Aviso
+            texto="No fue posible completar la baja."
+            tipo="error"
+          />
+        )}
+
+        {parametros.error ===
+          "estado" && (
+          <Aviso
+            texto="No fue posible cambiar el estado."
+            tipo="error"
+          />
+        )}
+
+        {matriculadoEditar ? (
           <div
-            style={{
-              background: "white",
-              border: "1px solid #d7e0e7",
-              borderRadius: "14px",
-              padding: "30px",
-              boxShadow:
-                "0 2px 5px rgba(0,0,0,.08)",
-            }}
+            style={tarjeta}
           >
-            <h3 style={{ marginTop: 0 }}>
-              Gestión de matrículas
+            <h3>
+              Editar matriculado
             </h3>
 
-            <p style={{ color: "#64748b" }}>
-              Registre técnicos, asigne matrículas
-              RNC y gestione altas y bajas.
+            <p>
+              Matrícula:{" "}
+              <strong>
+                {matriculadoEditar.numero_matricula ||
+                  "Sin matrícula"}
+              </strong>
             </p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "15px",
-                flexWrap: "wrap",
-                marginTop: "25px",
-              }}
+            <form
+              action={
+                editarMatriculado
+              }
             >
-              <a
-                href="/administrador?nuevo=1"
-                style={{
-                  padding: "14px 22px",
-                  borderRadius: "8px",
-                  background: "#0d5689",
-                  color: "white",
-                  fontWeight: "bold",
-                  textDecoration: "none",
-                }}
-              >
-                + Nuevo matriculado
-              </a>
+              <input
+                type="hidden"
+                name="id"
+                value={
+                  matriculadoEditar.id
+                }
+              />
 
-              <a
-                href="/administrador?buscar=1"
+              <div
+                style={grilla}
+              >
+                <Campo
+                  nombre="apellido_nombre"
+                  etiqueta="Apellido y nombre"
+                  valor={
+                    matriculadoEditar.apellido_nombre
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="dni"
+                  etiqueta="DNI"
+                  valor={
+                    matriculadoEditar.dni
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="telefono"
+                  etiqueta="Teléfono"
+                  valor={
+                    matriculadoEditar.telefono
+                  }
+                />
+
+                <Campo
+                  nombre="email"
+                  etiqueta="Email"
+                  tipo="email"
+                  valor={
+                    matriculadoEditar.email
+                  }
+                />
+
+                <Campo
+                  nombre="domicilio"
+                  etiqueta="Domicilio"
+                  valor={
+                    matriculadoEditar.domicilio
+                  }
+                />
+
+                <Campo
+                  nombre="localidad"
+                  etiqueta="Localidad"
+                  valor={
+                    matriculadoEditar.localidad
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="provincia"
+                  etiqueta="Provincia"
+                  valor={
+                    matriculadoEditar.provincia
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="especialidad"
+                  etiqueta="Especialidad"
+                  valor={
+                    matriculadoEditar.especialidad
+                  }
+                  requerido
+                />
+
+                <Campo
+                  nombre="fecha_emision"
+                  etiqueta="Fecha de emisión"
+                  tipo="date"
+                  valor={
+                    matriculadoEditar.fecha_emision
+                  }
+                />
+
+                <Campo
+                  nombre="fecha_vencimiento"
+                  etiqueta="Fecha de vencimiento"
+                  tipo="date"
+                  valor={
+                    matriculadoEditar.fecha_vencimiento
+                  }
+                />
+              </div>
+
+              <label
                 style={{
-                  padding: "14px 22px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  background: "white",
-                  color: "#334155",
+                  display: "block",
+                  marginTop: "20px",
                   fontWeight: "bold",
-                  textDecoration: "none",
                 }}
               >
-                Buscar matriculado
-              </a>
-            </div>
+                Observaciones
+
+                <textarea
+                  name="observaciones"
+                  defaultValue={
+                    matriculadoEditar.observaciones ??
+                    ""
+                  }
+                  rows={4}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing:
+                      "border-box",
+                    marginTop: "8px",
+                    padding: "13px",
+                    borderRadius: "8px",
+                    border:
+                      "1px solid #cbd5e1",
+                  }}
+                />
+              </label>
+
+              <div
+                style={botonera}
+              >
+                <button
+                  type="submit"
+                  style={botonAzul}
+                >
+                  Guardar cambios
+                </button>
+
+                <a
+                  href={`/administrador?buscar=1&q=${encodeURIComponent(
+                    terminoBusqueda ||
+                      matriculadoEditar.apellido_nombre ||
+                      ""
+                  )}`}
+                  style={botonBlanco}
+                >
+                  Cancelar
+                </a>
+              </div>
+            </form>
           </div>
         ) : mostrarNuevo ? (
-          <div
-            style={{
-              background: "white",
-              border: "1px solid #d7e0e7",
-              borderRadius: "14px",
-              padding: "30px",
-              boxShadow:
-                "0 2px 5px rgba(0,0,0,.08)",
-            }}
-          >
-            <h3
-              style={{
-                marginTop: 0,
-                fontSize: "24px",
-              }}
-            >
+          <div style={tarjeta}>
+            <h3>
               Nuevo matriculado
             </h3>
 
-            <p style={{ color: "#64748b" }}>
-              Al guardar, RENACLI asignará
-              automáticamente una matrícula
-              RNC-XXXXXX única.
-            </p>
-
-            {parametros.error === "campos" && (
-              <p style={{ color: "#b91c1c" }}>
-                Complete todos los campos
-                obligatorios.
-              </p>
-            )}
-
-            {parametros.error === "dni" && (
-              <p style={{ color: "#b91c1c" }}>
-                Ya existe un matriculado registrado
-                con ese DNI.
-              </p>
-            )}
-
-            {parametros.error === "guardar" && (
-              <p style={{ color: "#b91c1c" }}>
-                No fue posible guardar el
-                matriculado.
-              </p>
-            )}
-
-            <form action={crearMatriculado}>
+            <form
+              action={
+                crearMatriculado
+              }
+            >
               <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit,minmax(260px,1fr))",
-                  gap: "20px",
-                  marginTop: "25px",
-                }}
+                style={grilla}
               >
                 <Campo
                   nombre="apellido_nombre"
@@ -800,75 +1130,29 @@ export default async function AdministradorPage({
               </div>
 
               <div
-                style={{
-                  display: "flex",
-                  gap: "15px",
-                  marginTop: "30px",
-                  flexWrap: "wrap",
-                }}
+                style={botonera}
               >
                 <button
-                  type="submit"
-                  style={{
-                    padding: "14px 25px",
-                    border: 0,
-                    borderRadius: "8px",
-                    background: "#0d5689",
-                    color: "white",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                  }}
+                  style={botonAzul}
                 >
                   Guardar y generar matrícula
                 </button>
 
                 <a
                   href="/administrador"
-                  style={{
-                    padding: "14px 25px",
-                    border:
-                      "1px solid #cbd5e1",
-                    borderRadius: "8px",
-                    color: "#334155",
-                    textDecoration: "none",
-                    fontWeight: "bold",
-                  }}
+                  style={botonBlanco}
                 >
                   Cancelar
                 </a>
               </div>
             </form>
           </div>
-        ) : (
-          <div>
-            <div
-              style={{
-                background: "white",
-                border: "1px solid #d7e0e7",
-                borderRadius: "14px",
-                padding: "30px",
-                boxShadow:
-                  "0 2px 5px rgba(0,0,0,.08)",
-              }}
-            >
-              <h3
-                style={{
-                  marginTop: 0,
-                  fontSize: "24px",
-                }}
-              >
+        ) : mostrarBusqueda ? (
+          <>
+            <div style={tarjeta}>
+              <h3>
                 Buscar matriculado
               </h3>
-
-              <p
-                style={{
-                  color: "#64748b",
-                  lineHeight: 1.5,
-                }}
-              >
-                Puede buscar por número de matrícula,
-                DNI, apellido o nombre.
-              </p>
 
               <form
                 action="/administrador"
@@ -881,57 +1165,34 @@ export default async function AdministradorPage({
                 />
 
                 <div
-                  style={{
-                    display: "flex",
-                    gap: "12px",
-                    flexWrap: "wrap",
-                    marginTop: "20px",
-                  }}
+                  style={botonera}
                 >
                   <input
-                    type="text"
                     name="q"
                     defaultValue={
                       terminoBusqueda
                     }
-                    placeholder="Ej.: RNC-447052, DNI o apellido"
-                    autoFocus
+                    placeholder="RNC, DNI, apellido o nombre"
                     style={{
-                      flex: "1 1 350px",
+                      flex:
+                        "1 1 350px",
                       padding: "14px",
-                      borderRadius: "8px",
+                      borderRadius:
+                        "8px",
                       border:
                         "1px solid #cbd5e1",
-                      fontSize: "16px",
                     }}
                   />
 
                   <button
-                    type="submit"
-                    style={{
-                      padding: "14px 24px",
-                      border: 0,
-                      borderRadius: "8px",
-                      background: "#0d5689",
-                      color: "white",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
+                    style={botonAzul}
                   >
                     Buscar
                   </button>
 
                   <a
                     href="/administrador"
-                    style={{
-                      padding: "14px 24px",
-                      border:
-                        "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      color: "#334155",
-                      textDecoration: "none",
-                      fontWeight: "bold",
-                    }}
+                    style={botonBlanco}
                   >
                     Volver
                   </a>
@@ -939,221 +1200,307 @@ export default async function AdministradorPage({
               </form>
             </div>
 
-            {terminoBusqueda && (
-              <div
-                style={{
-                  marginTop: "25px",
-                }}
-              >
-                <p
-                  style={{
-                    color: "#475569",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {resultados.length === 0
-                    ? "No se encontraron matriculados."
-                    : `${resultados.length} resultado${
-                        resultados.length === 1
-                          ? ""
-                          : "s"
-                      } encontrado${
-                        resultados.length === 1
-                          ? ""
-                          : "s"
-                      }.`}
-                </p>
+            {resultados.map(
+              matriculado => {
+                const estado =
+                  (
+                    matriculado.estado ||
+                    ""
+                  ).toLowerCase()
 
-                {resultados.map(
-                  (matriculado) => (
+                const suspendida =
+                  estado.includes(
+                    "suspend"
+                  )
+
+                const baja =
+                  estado.includes(
+                    "baja"
+                  )
+
+                const confirmarBaja =
+                  Number(
+                    parametros.baja ??
+                      0
+                  ) ===
+                  matriculado.id
+
+                return (
+                  <div
+                    key={
+                      matriculado.id
+                    }
+                    style={{
+                      ...tarjeta,
+                      marginTop:
+                        "20px",
+                    }}
+                  >
+                    <h3>
+                      {
+                        matriculado.apellido_nombre
+                      }
+                    </h3>
+
+                    <p>
+                      <strong>
+                        {matriculado.numero_matricula ||
+                          "SIN MATRÍCULA"}
+                      </strong>
+                    </p>
+
                     <div
-                      key={matriculado.id}
-                      style={{
-                        background: "white",
-                        border:
-                          "1px solid #d7e0e7",
-                        borderRadius: "14px",
-                        padding: "25px",
-                        marginBottom: "18px",
-                        boxShadow:
-                          "0 2px 5px rgba(0,0,0,.06)",
-                      }}
+                      style={grilla}
                     >
+                      <Dato
+                        titulo="DNI"
+                        valor={
+                          matriculado.dni
+                        }
+                      />
+
+                      <Dato
+                        titulo="Estado"
+                        valor={
+                          matriculado.estado
+                        }
+                      />
+
+                      <Dato
+                        titulo="Teléfono"
+                        valor={
+                          matriculado.telefono
+                        }
+                      />
+
+                      <Dato
+                        titulo="Especialidad"
+                        valor={
+                          matriculado.especialidad
+                        }
+                      />
+
+                      <Dato
+                        titulo="Localidad"
+                        valor={
+                          matriculado.localidad
+                        }
+                      />
+
+                      <Dato
+                        titulo="Provincia"
+                        valor={
+                          matriculado.provincia
+                        }
+                      />
+
+                      <Dato
+                        titulo="Emisión"
+                        valor={formatearFecha(
+                          matriculado.fecha_emision
+                        )}
+                      />
+
+                      <Dato
+                        titulo="Vencimiento"
+                        valor={formatearFecha(
+                          matriculado.fecha_vencimiento
+                        )}
+                      />
+                    </div>
+
+                    {!baja && (
                       <div
-                        style={{
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          gap: "20px",
-                          flexWrap: "wrap",
-                          marginBottom: "20px",
-                        }}
+                        style={botonera}
                       >
-                        <div>
-                          <div
-                            style={{
-                              color:
-                                "#64748b",
-                              fontSize:
-                                "12px",
-                              fontWeight:
-                                "bold",
-                              letterSpacing:
-                                "1px",
-                            }}
-                          >
-                            MATRICULADO
-                          </div>
+                        <a
+                          href={`/administrador?buscar=1&q=${encodeURIComponent(
+                            terminoBusqueda
+                          )}&editar=${
+                            matriculado.id
+                          }`}
+                          style={
+                            botonBlanco
+                          }
+                        >
+                          Editar
+                        </a>
 
-                          <h3
-                            style={{
-                              margin:
-                                "6px 0",
-                              fontSize:
-                                "24px",
-                              color:
-                                "#172033",
-                            }}
-                          >
-                            {matriculado.apellido_nombre ||
-                              "Sin nombre"}
-                          </h3>
+                        <form
+                          action={
+                            cambiarEstado
+                          }
+                        >
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={
+                              matriculado.id
+                            }
+                          />
 
-                          <strong
-                            style={{
-                              color:
-                                "#0d5689",
-                            }}
-                          >
-                            {matriculado.numero_matricula ||
-                              "SIN MATRÍCULA"}
-                          </strong>
-                        </div>
+                          <input
+                            type="hidden"
+                            name="q"
+                            value={
+                              terminoBusqueda
+                            }
+                          />
 
-                        <div>
-                          <span
-                            style={{
-                              display:
-                                "inline-block",
-                              padding:
-                                "8px 12px",
-                              borderRadius:
-                                "999px",
-                              background:
-                                matriculado.estado
-                                  ?.toLowerCase()
-                                  .includes(
-                                    "vigente"
-                                  )
-                                  ? "#dcfce7"
-                                  : "#fef3c7",
-                              color:
-                                matriculado.estado
-                                  ?.toLowerCase()
-                                  .includes(
-                                    "vigente"
-                                  )
-                                  ? "#166534"
-                                  : "#92400e",
-                              fontWeight:
-                                "bold",
-                            }}
+                          <input
+                            type="hidden"
+                            name="estado"
+                            value={
+                              suspendida
+                                ? "vigente"
+                                : "suspendida"
+                            }
+                          />
+
+                          <button
+                            type="submit"
+                            style={
+                              suspendida
+                                ? botonVerde
+                                : botonAmarillo
+                            }
                           >
-                            {matriculado.estado ||
-                              "Sin estado"}
-                          </span>
-                        </div>
+                            {suspendida
+                              ? "Rehabilitar"
+                              : "Suspender"}
+                          </button>
+                        </form>
+
+                        <a
+                          href={`/administrador?buscar=1&q=${encodeURIComponent(
+                            terminoBusqueda
+                          )}&baja=${
+                            matriculado.id
+                          }`}
+                          style={
+                            botonRojo
+                          }
+                        >
+                          Dar de baja
+                        </a>
                       </div>
+                    )}
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit,minmax(220px,1fr))",
-                          gap: "18px",
-                        }}
-                      >
-                        <Dato
-                          titulo="DNI"
-                          valor={
-                            matriculado.dni
-                          }
-                        />
-
-                        <Dato
-                          titulo="Teléfono"
-                          valor={
-                            matriculado.telefono
-                          }
-                        />
-
-                        <Dato
-                          titulo="Especialidad"
-                          valor={
-                            matriculado.especialidad
-                          }
-                        />
-
-                        <Dato
-                          titulo="Localidad"
-                          valor={
-                            matriculado.localidad
-                          }
-                        />
-
-                        <Dato
-                          titulo="Provincia"
-                          valor={
-                            matriculado.provincia
-                          }
-                        />
-
-                        <Dato
-                          titulo="Fecha de emisión"
-                          valor={formatearFecha(
-                            matriculado.fecha_emision
-                          )}
-                        />
-
-                        <Dato
-                          titulo="Fecha de vencimiento"
-                          valor={formatearFecha(
-                            matriculado.fecha_vencimiento
-                          )}
-                        />
-                      </div>
-
-                      {matriculado.numero_matricula && (
+                    {confirmarBaja &&
+                      !baja && (
                         <div
                           style={{
                             marginTop:
-                              "22px",
+                              "20px",
+                            padding:
+                              "20px",
+                            background:
+                              "#fff1f2",
+                            border:
+                              "1px solid #fecdd3",
+                            borderRadius:
+                              "10px",
                           }}
                         >
-                          <a
-                            href={`/matriculado/${encodeURIComponent(
-                              matriculado.numero_matricula
-                            )}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              color:
-                                "#0d5689",
-                              fontWeight:
-                                "bold",
-                              textDecoration:
-                                "none",
-                            }}
+                          <strong>
+                            Confirmar baja
+                          </strong>
+
+                          <p>
+                            Esta acción
+                            dará de baja al
+                            matriculado y
+                            liberará el número{" "}
+                            <strong>
+                              {matriculado.numero_matricula}
+                            </strong>{" "}
+                            para que pueda
+                            asignarse en el
+                            futuro a otra
+                            persona.
+                          </p>
+
+                          <form
+                            action={
+                              darDeBaja
+                            }
                           >
-                            Ver ficha pública ↗
-                          </a>
+                            <input
+                              type="hidden"
+                              name="id"
+                              value={
+                                matriculado.id
+                              }
+                            />
+
+                            <input
+                              type="hidden"
+                              name="q"
+                              value={
+                                terminoBusqueda
+                              }
+                            />
+
+                            <div
+                              style={
+                                botonera
+                              }
+                            >
+                              <button
+                                type="submit"
+                                style={
+                                  botonRojo
+                                }
+                              >
+                                Sí, dar de baja y liberar RNC
+                              </button>
+
+                              <a
+                                href={`/administrador?buscar=1&q=${encodeURIComponent(
+                                  terminoBusqueda
+                                )}`}
+                                style={
+                                  botonBlanco
+                                }
+                              >
+                                Cancelar
+                              </a>
+                            </div>
+                          </form>
                         </div>
                       )}
-                    </div>
-                  )
-                )}
-              </div>
+                  </div>
+                )
+              }
             )}
+          </>
+        ) : (
+          <div style={tarjeta}>
+            <h3>
+              Gestión de matrículas
+            </h3>
+
+            <p>
+              Registre técnicos,
+              consulte matrículas y
+              gestione estados.
+            </p>
+
+            <div style={botonera}>
+              <a
+                href="/administrador?nuevo=1"
+                style={botonAzul}
+              >
+                + Nuevo matriculado
+              </a>
+
+              <a
+                href="/administrador?buscar=1"
+                style={botonBlanco}
+              >
+                Buscar matriculado
+              </a>
+            </div>
           </div>
         )}
       </section>
@@ -1166,17 +1513,17 @@ function Campo({
   etiqueta,
   tipo = "text",
   requerido = false,
+  valor = null,
 }: {
   nombre: string
   etiqueta: string
   tipo?: string
   requerido?: boolean
+  valor?: string | null
 }) {
   return (
     <label
       style={{
-        display: "block",
-        color: "#334155",
         fontWeight: "bold",
       }}
     >
@@ -1187,6 +1534,11 @@ function Campo({
         name={nombre}
         type={tipo}
         required={requerido}
+        defaultValue={
+          tipo === "date" && valor
+            ? valor.slice(0, 10)
+            : valor ?? ""
+        }
         style={{
           display: "block",
           width: "100%",
@@ -1194,9 +1546,8 @@ function Campo({
           marginTop: "8px",
           padding: "13px",
           borderRadius: "8px",
-          border: "1px solid #cbd5e1",
-          fontSize: "16px",
-          fontWeight: "normal",
+          border:
+            "1px solid #cbd5e1",
         }}
       />
     </label>
@@ -1212,26 +1563,126 @@ function Dato({
 }) {
   return (
     <div>
-      <div
-        style={{
-          fontSize: "12px",
-          color: "#64748b",
-          fontWeight: "bold",
-          textTransform: "uppercase",
-          letterSpacing: ".5px",
-          marginBottom: "5px",
-        }}
-      >
+      <strong>
         {titulo}
-      </div>
+      </strong>
 
       <div
         style={{
-          color: "#172033",
+          marginTop: "5px",
         }}
       >
         {valor || "-"}
       </div>
     </div>
   )
+}
+
+function Aviso({
+  texto,
+  tipo,
+}: {
+  texto: string
+  tipo: "ok" | "error"
+}) {
+  return (
+    <div
+      style={{
+        padding: "16px",
+        marginBottom: "22px",
+        borderRadius: "10px",
+        background:
+          tipo === "ok"
+            ? "#ecfdf5"
+            : "#fff1f2",
+        border:
+          tipo === "ok"
+            ? "1px solid #86efac"
+            : "1px solid #fecdd3",
+        color:
+          tipo === "ok"
+            ? "#166534"
+            : "#be123c",
+      }}
+    >
+      {texto}
+    </div>
+  )
+}
+
+const tarjeta = {
+  background: "white",
+  border: "1px solid #d7e0e7",
+  borderRadius: "14px",
+  padding: "30px",
+  boxShadow:
+    "0 2px 5px rgba(0,0,0,.08)",
+}
+
+const grilla = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "20px",
+}
+
+const botonera = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap" as const,
+  marginTop: "25px",
+}
+
+const botonAzul = {
+  padding: "13px 20px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#0d5689",
+  color: "white",
+  fontWeight: "bold",
+  textDecoration: "none",
+  cursor: "pointer",
+}
+
+const botonBlanco = {
+  padding: "13px 20px",
+  border:
+    "1px solid #cbd5e1",
+  borderRadius: "8px",
+  background: "white",
+  color: "#334155",
+  fontWeight: "bold",
+  textDecoration: "none",
+  cursor: "pointer",
+}
+
+const botonAmarillo = {
+  padding: "13px 20px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#f59e0b",
+  color: "white",
+  fontWeight: "bold",
+  cursor: "pointer",
+}
+
+const botonVerde = {
+  padding: "13px 20px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#15803d",
+  color: "white",
+  fontWeight: "bold",
+  cursor: "pointer",
+}
+
+const botonRojo = {
+  padding: "13px 20px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#b91c1c",
+  color: "white",
+  fontWeight: "bold",
+  textDecoration: "none",
+  cursor: "pointer",
 }
