@@ -2105,6 +2105,9 @@ export default async function AdministradorPage({
                         <div
                           style={{
                             marginTop: "10px",
+                            display: "flex",
+                            gap: "10px",
+                            flexWrap: "wrap",
                           }}
                         >
                           <a
@@ -2122,6 +2125,23 @@ export default async function AdministradorPage({
                           >
                             Ver / administrar
                           </a>
+
+                          {estadoEfectivo(m) !== "baja" && (
+                            <a
+                              href={`/administrador?renovar=${m.id}&q=${encodeURIComponent(
+                                m.numero_matricula ||
+                                  m.dni ||
+                                  m.apellido_nombre ||
+                                  ""
+                              )}`}
+                              style={{
+                                ...botonVerde,
+                                padding: "8px 12px",
+                              }}
+                            >
+                              Renovar matrícula
+                            </a>
+                          )}
                         </div>
                       </div>
                     ))}
