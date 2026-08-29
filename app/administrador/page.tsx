@@ -5,6 +5,25 @@ import { createClient } from "@supabase/supabase-js"
 
 const COOKIE_NAME = "renacli_admin_session"
 
+type MatriculadoAdmin = {
+  id: number
+  numero_matricula: string | null
+  apellido_nombre: string | null
+  dni: string | null
+  telefono: string | null
+  email: string | null
+  domicilio: string | null
+  localidad: string | null
+  provincia: string | null
+  fecha_emision: string | null
+  fecha_vencimiento: string | null
+  estado: string | null
+  especialidad: string | null
+  foto_url: string | null
+  codigo_qr: string | null
+  observaciones: string | null
+}
+
 function obtenerTokenAdministrador() {
   const password = process.env.RENACLI_ADMIN_PASSWORD
 
@@ -216,12 +235,82 @@ async function crearMatriculado(formData: FormData) {
   )
 }
 
+async function buscarMatriculados(
+  termino: string
+): Promise<MatriculadoAdmin[]> {
+  const busqueda = termino.trim()
+
+  if (!busqueda) return []
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const terminoSeguro = busqueda
+    .replace(/,/g, "")
+    .replace(/\(/g, "")
+    .replace(/\)/g, "")
+
+  const { data, error } = await supabase
+    .from("matriculados")
+    .select(
+      `
+        id,
+        numero_matricula,
+        apellido_nombre,
+        dni,
+        telefono,
+        email,
+        domicilio,
+        localidad,
+        provincia,
+        fecha_emision,
+        fecha_vencimiento,
+        estado,
+        especialidad,
+        foto_url,
+        codigo_qr,
+        observaciones
+      `
+    )
+    .or(
+      `numero_matricula.ilike.%${terminoSeguro}%,dni.ilike.%${terminoSeguro}%,apellido_nombre.ilike.%${terminoSeguro}%`
+    )
+    .order("apellido_nombre", {
+      ascending: true,
+    })
+    .limit(50)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error buscando matriculados:",
+      error
+    )
+
+    return []
+  }
+
+  return (data ?? []) as MatriculadoAdmin[]
+}
+
+function formatearFecha(fecha: string | null) {
+  if (!fecha) return "-"
+
+  const partes = fecha.slice(0, 10).split("-")
+
+  if (partes.length !== 3) {
+    return fecha
+  }
+
+  return `${partes[2]}/${partes[1]}/${partes[0]}`
+}
+
 type Props = {
   searchParams?: Promise<{
     error?: string
     nuevo?: string
     creado?: string
     rnc?: string
+    buscar?: string
+    q?: string
   }>
 }
 
@@ -397,6 +486,24 @@ export default async function AdministradorPage({
   const mostrarNuevo =
     parametros.nuevo === "1"
 
+  const mostrarBusqueda =
+    parametros.buscar === "1"
+
+  const terminoBusqueda =
+    String(parametros.q ?? "").trim()
+
+  let resultados: MatriculadoAdmin[] = []
+
+  if (
+    mostrarBusqueda &&
+    terminoBusqueda
+  ) {
+    resultados =
+      await buscarMatriculados(
+        terminoBusqueda
+      )
+  }
+
   return (
     <main
       style={{
@@ -504,7 +611,9 @@ export default async function AdministradorPage({
             >
               Matriculado creado correctamente.
               Matrícula asignada:{" "}
-              <strong>{parametros.rnc}</strong>
+              <strong>
+                {parametros.rnc}
+              </strong>
             </div>
           )}
 
@@ -524,7 +633,8 @@ export default async function AdministradorPage({
           </div>
         )}
 
-        {!mostrarNuevo ? (
+        {!mostrarNuevo &&
+        !mostrarBusqueda ? (
           <div
             style={{
               background: "white",
@@ -566,8 +676,8 @@ export default async function AdministradorPage({
                 + Nuevo matriculado
               </a>
 
-              <button
-                type="button"
+              <a
+                href="/administrador?buscar=1"
                 style={{
                   padding: "14px 22px",
                   border: "1px solid #cbd5e1",
@@ -575,13 +685,14 @@ export default async function AdministradorPage({
                   background: "white",
                   color: "#334155",
                   fontWeight: "bold",
+                  textDecoration: "none",
                 }}
               >
                 Buscar matriculado
-              </button>
+              </a>
             </div>
           </div>
-        ) : (
+        ) : mostrarNuevo ? (
           <div
             style={{
               background: "white",
@@ -728,6 +839,322 @@ export default async function AdministradorPage({
               </div>
             </form>
           </div>
+        ) : (
+          <div>
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #d7e0e7",
+                borderRadius: "14px",
+                padding: "30px",
+                boxShadow:
+                  "0 2px 5px rgba(0,0,0,.08)",
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  fontSize: "24px",
+                }}
+              >
+                Buscar matriculado
+              </h3>
+
+              <p
+                style={{
+                  color: "#64748b",
+                  lineHeight: 1.5,
+                }}
+              >
+                Puede buscar por número de matrícula,
+                DNI, apellido o nombre.
+              </p>
+
+              <form
+                action="/administrador"
+                method="get"
+              >
+                <input
+                  type="hidden"
+                  name="buscar"
+                  value="1"
+                />
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                    marginTop: "20px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    name="q"
+                    defaultValue={
+                      terminoBusqueda
+                    }
+                    placeholder="Ej.: RNC-447052, DNI o apellido"
+                    autoFocus
+                    style={{
+                      flex: "1 1 350px",
+                      padding: "14px",
+                      borderRadius: "8px",
+                      border:
+                        "1px solid #cbd5e1",
+                      fontSize: "16px",
+                    }}
+                  />
+
+                  <button
+                    type="submit"
+                    style={{
+                      padding: "14px 24px",
+                      border: 0,
+                      borderRadius: "8px",
+                      background: "#0d5689",
+                      color: "white",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Buscar
+                  </button>
+
+                  <a
+                    href="/administrador"
+                    style={{
+                      padding: "14px 24px",
+                      border:
+                        "1px solid #cbd5e1",
+                      borderRadius: "8px",
+                      color: "#334155",
+                      textDecoration: "none",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Volver
+                  </a>
+                </div>
+              </form>
+            </div>
+
+            {terminoBusqueda && (
+              <div
+                style={{
+                  marginTop: "25px",
+                }}
+              >
+                <p
+                  style={{
+                    color: "#475569",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {resultados.length === 0
+                    ? "No se encontraron matriculados."
+                    : `${resultados.length} resultado${
+                        resultados.length === 1
+                          ? ""
+                          : "s"
+                      } encontrado${
+                        resultados.length === 1
+                          ? ""
+                          : "s"
+                      }.`}
+                </p>
+
+                {resultados.map(
+                  (matriculado) => (
+                    <div
+                      key={matriculado.id}
+                      style={{
+                        background: "white",
+                        border:
+                          "1px solid #d7e0e7",
+                        borderRadius: "14px",
+                        padding: "25px",
+                        marginBottom: "18px",
+                        boxShadow:
+                          "0 2px 5px rgba(0,0,0,.06)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent:
+                            "space-between",
+                          gap: "20px",
+                          flexWrap: "wrap",
+                          marginBottom: "20px",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              color:
+                                "#64748b",
+                              fontSize:
+                                "12px",
+                              fontWeight:
+                                "bold",
+                              letterSpacing:
+                                "1px",
+                            }}
+                          >
+                            MATRICULADO
+                          </div>
+
+                          <h3
+                            style={{
+                              margin:
+                                "6px 0",
+                              fontSize:
+                                "24px",
+                              color:
+                                "#172033",
+                            }}
+                          >
+                            {matriculado.apellido_nombre ||
+                              "Sin nombre"}
+                          </h3>
+
+                          <strong
+                            style={{
+                              color:
+                                "#0d5689",
+                            }}
+                          >
+                            {matriculado.numero_matricula ||
+                              "SIN MATRÍCULA"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span
+                            style={{
+                              display:
+                                "inline-block",
+                              padding:
+                                "8px 12px",
+                              borderRadius:
+                                "999px",
+                              background:
+                                matriculado.estado
+                                  ?.toLowerCase()
+                                  .includes(
+                                    "vigente"
+                                  )
+                                  ? "#dcfce7"
+                                  : "#fef3c7",
+                              color:
+                                matriculado.estado
+                                  ?.toLowerCase()
+                                  .includes(
+                                    "vigente"
+                                  )
+                                  ? "#166534"
+                                  : "#92400e",
+                              fontWeight:
+                                "bold",
+                            }}
+                          >
+                            {matriculado.estado ||
+                              "Sin estado"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit,minmax(220px,1fr))",
+                          gap: "18px",
+                        }}
+                      >
+                        <Dato
+                          titulo="DNI"
+                          valor={
+                            matriculado.dni
+                          }
+                        />
+
+                        <Dato
+                          titulo="Teléfono"
+                          valor={
+                            matriculado.telefono
+                          }
+                        />
+
+                        <Dato
+                          titulo="Especialidad"
+                          valor={
+                            matriculado.especialidad
+                          }
+                        />
+
+                        <Dato
+                          titulo="Localidad"
+                          valor={
+                            matriculado.localidad
+                          }
+                        />
+
+                        <Dato
+                          titulo="Provincia"
+                          valor={
+                            matriculado.provincia
+                          }
+                        />
+
+                        <Dato
+                          titulo="Fecha de emisión"
+                          valor={formatearFecha(
+                            matriculado.fecha_emision
+                          )}
+                        />
+
+                        <Dato
+                          titulo="Fecha de vencimiento"
+                          valor={formatearFecha(
+                            matriculado.fecha_vencimiento
+                          )}
+                        />
+                      </div>
+
+                      {matriculado.numero_matricula && (
+                        <div
+                          style={{
+                            marginTop:
+                              "22px",
+                          }}
+                        >
+                          <a
+                            href={`/matriculado/${encodeURIComponent(
+                              matriculado.numero_matricula
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              color:
+                                "#0d5689",
+                              fontWeight:
+                                "bold",
+                              textDecoration:
+                                "none",
+                            }}
+                          >
+                            Ver ficha pública ↗
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
         )}
       </section>
     </main>
@@ -773,5 +1200,38 @@ function Campo({
         }}
       />
     </label>
+  )
+}
+
+function Dato({
+  titulo,
+  valor,
+}: {
+  titulo: string
+  valor: string | null
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: "12px",
+          color: "#64748b",
+          fontWeight: "bold",
+          textTransform: "uppercase",
+          letterSpacing: ".5px",
+          marginBottom: "5px",
+        }}
+      >
+        {titulo}
+      </div>
+
+      <div
+        style={{
+          color: "#172033",
+        }}
+      >
+        {valor || "-"}
+      </div>
+    </div>
   )
 }
