@@ -1,4 +1,4 @@
-/**
+**
  * Capa de datos de RENACLI.
  *
  * ------------------------------------------------------------------
@@ -221,6 +221,15 @@ function primerValor(
  * Convierte el estado almacenado en Supabase
  * al estado utilizado por la interfaz.
  */
+function fechaHoyArgentina() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
 function normalizarEstado(
   valor: string,
   vencimiento: string,
@@ -266,7 +275,7 @@ function normalizarEstado(
   if (esVigente) {
     if (
       vencimiento &&
-      vencimiento < new Date().toISOString().slice(0, 10)
+      vencimiento < fechaHoyArgentina()
     ) {
       return "vencida"
     }
