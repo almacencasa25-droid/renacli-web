@@ -1827,6 +1827,13 @@ export default async function AdministradorPage({
                           Renovar matrícula
                         </a>
 
+                        <a
+                          href={`/administrador/carnet/${matriculado.id}`}
+                          style={botonAzul}
+                        >
+                          Ver / Generar carnet
+                        </a>
+
                         <form
                           action={
                             cambiarEstado
@@ -2127,20 +2134,33 @@ export default async function AdministradorPage({
                           </a>
 
                           {estadoEfectivo(m) !== "baja" && (
-                            <a
-                              href={`/administrador?renovar=${m.id}&q=${encodeURIComponent(
-                                m.numero_matricula ||
-                                  m.dni ||
-                                  m.apellido_nombre ||
-                                  ""
-                              )}`}
-                              style={{
-                                ...botonVerde,
-                                padding: "8px 12px",
-                              }}
-                            >
-                              Renovar matrícula
-                            </a>
+                            <>
+                              <a
+                                href={`/administrador?renovar=${m.id}&q=${encodeURIComponent(
+                                  m.numero_matricula ||
+                                    m.dni ||
+                                    m.apellido_nombre ||
+                                    ""
+                                )}`}
+                                style={{
+                                  ...botonVerde,
+                                  padding: "8px 12px",
+                                  textDecoration: "none",
+                                }}
+                              >
+                                Renovar matrícula
+                              </a>
+
+                              <a
+                                href={`/administrador/carnet/${m.id}`}
+                                style={{
+                                  ...botonAzul,
+                                  padding: "8px 12px",
+                                }}
+                              >
+                                Ver / Generar carnet
+                              </a>
+                            </>
                           )}
                         </div>
                       </div>
@@ -2365,6 +2385,7 @@ const botonVerde = {
   background: "#15803d",
   color: "white",
   fontWeight: "bold",
+  textDecoration: "none",
   cursor: "pointer",
 }
 
