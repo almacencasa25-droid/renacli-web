@@ -2,6 +2,7 @@ import crypto from "crypto"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
+import FotoMatriculado from "../../components/foto-matriculado"
 
 const COOKIE_NAME = "renacli_admin_session"
 
@@ -232,6 +233,165 @@ async function crearMatriculado(formData: FormData) {
     `/administrador?creado=1&rnc=${encodeURIComponent(
       String(numeroRnc)
     )}`
+  )
+}
+
+
+async function guardarFotoMatriculado(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  if (!id) {
+    redirect("/administrador?error=foto")
+  }
+
+  const archivo = formData.get("foto")
+  const fotoCapturada = String(
+    formData.get("foto_capturada") ?? ""
+  ).trim()
+
+  let bytes: Uint8Array | null = null
+  let contentType = ""
+  let extension = ""
+
+  if (
+    archivo instanceof File &&
+    archivo.size > 0
+  ) {
+    const tiposPermitidos = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]
+
+    if (
+      !tiposPermitidos.includes(archivo.type) ||
+      archivo.size > 10 * 1024 * 1024
+    ) {
+      redirect(
+        `/administrador?editar=${id}&error=foto`
+      )
+    }
+
+    bytes = new Uint8Array(
+      await archivo.arrayBuffer()
+    )
+
+    contentType = archivo.type
+
+    extension =
+      archivo.type === "image/png"
+        ? "png"
+        : archivo.type === "image/webp"
+          ? "webp"
+          : "jpg"
+  } else if (
+    fotoCapturada.startsWith(
+      "data:image/jpeg;base64,"
+    )
+  ) {
+    const base64 = fotoCapturada.split(",")[1]
+
+    if (!base64) {
+      redirect(
+        `/administrador?editar=${id}&error=foto`
+      )
+    }
+
+    const buffer = Buffer.from(
+      base64,
+      "base64"
+    )
+
+    if (buffer.length > 10 * 1024 * 1024) {
+      redirect(
+        `/administrador?editar=${id}&error=foto`
+      )
+    }
+
+    bytes = new Uint8Array(buffer)
+    contentType = "image/jpeg"
+    extension = "jpg"
+  } else {
+    redirect(
+      `/administrador?editar=${id}&error=foto`
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { data: matriculado } = await supabase
+    .from("matriculados")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!matriculado) {
+    redirect("/administrador?error=foto")
+  }
+
+  const nombreArchivo =
+    `${id}/foto-${Date.now()}.${extension}`
+
+  const { error: errorSubida } =
+    await supabase.storage
+      .from("fotos-matriculados")
+      .upload(nombreArchivo, bytes, {
+        contentType,
+        upsert: false,
+      })
+
+  if (errorSubida) {
+    console.error(
+      "[RENACLI] Error subiendo foto:",
+      errorSubida
+    )
+
+    redirect(
+      `/administrador?editar=${id}&error=foto`
+    )
+  }
+
+  const { data: urlPublica } =
+    supabase.storage
+      .from("fotos-matriculados")
+      .getPublicUrl(nombreArchivo)
+
+  const fotoUrl =
+    urlPublica.publicUrl
+
+  const { error: errorGuardar } =
+    await supabase
+      .from("matriculados")
+      .update({
+        foto_url: fotoUrl,
+      })
+      .eq("id", id)
+
+  if (errorGuardar) {
+    console.error(
+      "[RENACLI] Error guardando foto_url:",
+      errorGuardar
+    )
+
+    await supabase.storage
+      .from("fotos-matriculados")
+      .remove([nombreArchivo])
+
+    redirect(
+      `/administrador?editar=${id}&error=foto`
+    )
+  }
+
+  redirect(
+    `/administrador?editar=${id}&mensaje=foto`
   )
 }
 
@@ -1144,6 +1304,23 @@ export default async function AdministradorPage({
           Panel de matriculados
         </h2>
 
+
+        {parametros.mensaje ===
+          "foto" && (
+          <Aviso
+            texto="Foto guardada correctamente. Ya aparecerá en el carnet."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "foto" && (
+          <Aviso
+            texto="No fue posible guardar la foto. Usá una imagen JPG, PNG o WEBP de hasta 10 MB."
+            tipo="error"
+          />
+        )}
+
         {parametros.mensaje ===
           "editado" && (
           <Aviso
@@ -1385,6 +1562,54 @@ export default async function AdministradorPage({
                 </a>
               </div>
             </form>
+
+            <div
+              style={{
+                marginTop: "24px",
+              }}
+            >
+              {matriculadoEditar.foto_url && (
+                <div
+                  style={{
+                    marginBottom: "18px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 10px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Foto actual
+                  </p>
+
+                  <img
+                    src={matriculadoEditar.foto_url}
+                    alt={`Foto de ${
+                      matriculadoEditar.apellido_nombre ||
+                      "matriculado"
+                    }`}
+                    style={{
+                      width: "150px",
+                      height: "180px",
+                      objectFit: "cover",
+                      borderRadius: "12px",
+                      border:
+                        "1px solid #cbd5e1",
+                    }}
+                  />
+                </div>
+              )}
+
+              <FotoMatriculado
+                matriculadoId={
+                  matriculadoEditar.id
+                }
+                action={
+                  guardarFotoMatriculado
+                }
+              />
+            </div>
           </div>
         ) : matriculadoRenovar ? (
           <div style={tarjeta}>
