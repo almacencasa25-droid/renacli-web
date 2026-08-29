@@ -79,6 +79,35 @@ function descripcionEstado(estado: EstadoPublico) {
   }
 }
 
+function estiloEstado(estado: EstadoPublico) {
+  switch (estado) {
+    case "vigente":
+      return {
+        contenedor: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        punto: "bg-emerald-500",
+        texto: "VIGENTE",
+      }
+    case "vencida":
+      return {
+        contenedor: "border-red-200 bg-red-50 text-red-800",
+        punto: "bg-red-500",
+        texto: "VENCIDA",
+      }
+    case "suspendida":
+      return {
+        contenedor: "border-amber-200 bg-amber-50 text-amber-800",
+        punto: "bg-amber-500",
+        texto: "SUSPENDIDA",
+      }
+    case "baja":
+      return {
+        contenedor: "border-slate-300 bg-slate-100 text-slate-800",
+        punto: "bg-slate-500",
+        texto: "DADA DE BAJA",
+      }
+  }
+}
+
 function formatearFecha(fecha: string | null) {
   if (!fecha) return "No informada"
 
@@ -129,6 +158,8 @@ export default async function VerificarCodigoPage({ params }: PageProps) {
     acreditacionActual,
   )
 
+  const visualEstado = estiloEstado(estado)
+
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <SiteHeader />
@@ -154,15 +185,48 @@ export default async function VerificarCodigoPage({ params }: PageProps) {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Estado de la matrícula
               </p>
-              <h2 className="mt-2 text-2xl font-bold text-foreground">
+
+              <div
+                className={`mt-3 inline-flex items-center gap-3 rounded-full border px-4 py-2 ${visualEstado.contenedor}`}
+              >
+                <span
+                  className={`h-3 w-3 rounded-full ${visualEstado.punto}`}
+                  aria-hidden="true"
+                />
+                <span className="text-base font-extrabold tracking-wide">
+                  {visualEstado.texto}
+                </span>
+              </div>
+
+              <h2 className="mt-4 text-2xl font-bold text-foreground">
                 {textoEstado(estado)}
               </h2>
+
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {descripcionEstado(estado)}
               </p>
             </div>
 
-            <div className="grid gap-5 p-6 sm:grid-cols-2 sm:p-8">
+            <div className="grid gap-6 p-6 sm:grid-cols-[180px_1fr] sm:p-8">
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Foto del técnico
+                </p>
+
+                {credencial.foto_url ? (
+                  <img
+                    src={credencial.foto_url}
+                    alt={`Foto de ${credencial.apellido_nombre || "técnico matriculado"}`}
+                    className="h-[210px] w-[170px] rounded-xl border border-border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[210px] w-[170px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/50 p-4 text-center text-sm text-muted-foreground">
+                    Foto no disponible
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Matrícula
@@ -229,6 +293,7 @@ export default async function VerificarCodigoPage({ params }: PageProps) {
                   </p>
                 </div>
               ) : null}
+              </div>
             </div>
 
             {!acreditacionActual ? (
