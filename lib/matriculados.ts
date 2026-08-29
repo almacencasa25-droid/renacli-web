@@ -1,670 +1,226 @@
-import crypto from "crypto"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
-import { createClient } from "@supabase/supabase-js"
+/**
+ * Capa de datos de RENACLI.
+ *
+ * ------------------------------------------------------------------
+ * CONECTADO A SUPABASE
+ * ------------------------------------------------------------------
+ *
+ * Vista pública consultada:
+ *   matriculados_publicos
+ *
+ * Campo público de búsqueda:
+ *   numero_matricula
+ *
+ * Variables de entorno utilizadas:
+ *   NEXT_PUBLIC_SUPABASE_URL
+ *   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ *
+ * IMPORTANTE:
+ * DNI, domicilio particular, correo electrónico y observaciones
+ * administrativas NO se consultan desde esta capa pública.
+ * ------------------------------------------------------------------
+ */
 
-const COOKIE_NAME = "renacli_admin_session"
+import { getSupabase, supabaseConfigurado } from "@/lib/supabase"
 
-type MatriculadoAdmin = {
-  id: number
-  numero_matricula: string | null
-  apellido_nombre: string | null
-  dni: string | null
-  telefono: string | null
-  email: string | null
-  domicilio: string | null
-  localidad: string | null
-  provincia: string | null
-  fecha_emision: string | null
-  fecha_vencimiento: string | null
-  estado: string | null
-  especialidad: string | null
+export type EstadoMatricula =
+  | "vigente"
+  | "vencida"
+  | "suspendida"
+  | "baja"
+
+export type TipoBusqueda = "matricula" | "dni"
+
+export type MatriculadoPublico = {
+  /** Número de matrícula público. También se utiliza para el QR. */
+  matricula: string
+  apellido: string
+  nombre: string
+  estado: EstadoMatricula
+
+  /** Fecha ISO YYYY-MM-DD */
+  fecha_emision: string
+
+  /** Fecha ISO YYYY-MM-DD */
+  fecha_vencimiento: string
+
+  especialidad: string
+  localidad: string
+  provincia: string
+  telefono: string
   foto_url: string | null
-  codigo_qr: string | null
-  observaciones: string | null
 }
 
-function obtenerTokenAdministrador() {
-  const password = process.env.RENACLI_ADMIN_PASSWORD
+export const ESTADOS: Record<
+  EstadoMatricula,
+  {
+    etiqueta: string
+    descripcion: string
+    tono: "success" | "warning" | "destructive" | "muted"
+  }
+> = {
+  vigente: {
+    etiqueta: "MATRÍCULA VIGENTE",
+    descripcion: "El técnico se encuentra habilitado para ejercer.",
+    tono: "success",
+  },
 
-  if (!password) return null
+  vencida: {
+    etiqueta: "MATRÍCULA VENCIDA",
+    descripcion:
+      "La matrícula no fue renovada. El técnico no se encuentra habilitado.",
+    tono: "warning",
+  },
 
-  return crypto
-    .createHash("sha256")
-    .update(password)
-    .digest("hex")
+  suspendida: {
+    etiqueta: "MATRÍCULA SUSPENDIDA",
+    descripcion:
+      "La habilitación se encuentra suspendida por resolución del registro.",
+    tono: "destructive",
+  },
+
+  baja: {
+    etiqueta: "MATRÍCULA DADA DE BAJA",
+    descripcion: "La matrícula fue dada de baja del registro.",
+    tono: "muted",
+  },
 }
 
-function obtenerSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const secret = process.env.SUPABASE_SECRET_KEY
+/**
+ * Datos ficticios utilizados únicamente si Supabase
+ * no está configurado.
+ */
+export const MATRICULADOS_EJEMPLO: MatriculadoPublico[] = [
+  {
+    matricula: "RENACLI-000001",
+    apellido: "Ejemplo",
+    nombre: "Técnico Uno",
+    estado: "vigente",
+    fecha_emision: "2024-03-15",
+    fecha_vencimiento: "2027-03-15",
+    especialidad: "Refrigeración comercial",
+    localidad: "Localidad de ejemplo",
+    provincia: "Provincia de ejemplo",
+    telefono: "000 000-0000",
+    foto_url: null,
+  },
+]
 
-  if (!url || !secret) {
-    throw new Error(
-      "Falta configurar Supabase para el administrador."
-    )
+/**
+ * IMPORTANTE:
+ * Esta es la vista pública expuesta en Supabase Data API.
+ * No utilizar aquí la tabla privada "matriculados".
+ */
+const TABLA = "matriculados_publicos"
+
+/**
+ * Normaliza números de matrícula.
+ *
+ * Admite ejemplos como:
+ *   1
+ *   000001
+ *   RENACLI-000001
+ *   renacli000001
+ *   RNC-000001
+ *
+ * Devuelve:
+ *   RENACLI-000001
+ */
+export function normalizarMatricula(valor: string) {
+  const original = valor.trim()
+
+  if (!original) return ""
+
+  const limpio = original
+    .replace(/[^0-9a-zA-Z]/g, "")
+    .toUpperCase()
+
+  let digitos = limpio
+
+  if (digitos.startsWith("RENACLI")) {
+    digitos = digitos.substring("RENACLI".length)
+  } else if (digitos.startsWith("RNC")) {
+    digitos = digitos.substring("RNC".length)
   }
 
-  return createClient(url, secret, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  })
+  if (/^\d+$/.test(digitos)) {
+    return `RENACLI-${digitos.padStart(6, "0")}`
+  }
+
+  return original.toUpperCase()
 }
 
-async function estaAutorizado() {
-  const cookieStore = await cookies()
+/**
+ * Genera las distintas variantes que aceptaremos durante
+ * la búsqueda para mantener compatibilidad con datos existentes.
+ */
+function variantesMatricula(valor: string) {
+  const bruto = valor.trim()
 
-  const tokenGuardado =
-    cookieStore.get(COOKIE_NAME)?.value
+  if (!bruto) return []
 
-  const tokenCorrecto =
-    obtenerTokenAdministrador()
+  const limpio = bruto
+    .replace(/[^0-9a-zA-Z]/g, "")
+    .toUpperCase()
 
-  return (
-    Boolean(tokenCorrecto) &&
-    tokenGuardado === tokenCorrecto
+  let digitos = limpio
+
+  if (digitos.startsWith("RENACLI")) {
+    digitos = digitos.substring("RENACLI".length)
+  } else if (digitos.startsWith("RNC")) {
+    digitos = digitos.substring("RNC".length)
+  }
+
+  const variantes = new Set<string>()
+
+  variantes.add(bruto)
+  variantes.add(bruto.toUpperCase())
+  variantes.add(normalizarMatricula(bruto))
+
+  if (/^\d+$/.test(digitos)) {
+    const seisDigitos = digitos.padStart(6, "0")
+
+    variantes.add(digitos)
+    variantes.add(String(Number(digitos)))
+    variantes.add(seisDigitos)
+    variantes.add(`RENACLI-${seisDigitos}`)
+    variantes.add(`RNC-${seisDigitos}`)
+  }
+
+  return [...variantes].filter(
+    (valorVariante) =>
+      valorVariante.length > 0 &&
+      !valorVariante.includes(","),
   )
 }
 
-async function iniciarSesion(formData: FormData) {
-  "use server"
-
-  const passwordIngresada = String(
-    formData.get("password") ?? ""
-  )
-
-  const passwordCorrecta =
-    process.env.RENACLI_ADMIN_PASSWORD
-
-  if (!passwordCorrecta) {
-    redirect("/administrador?error=config")
-  }
-
-  if (passwordIngresada !== passwordCorrecta) {
-    redirect("/administrador?error=incorrecta")
-  }
-
-  const token = obtenerTokenAdministrador()
-
-  if (!token) {
-    redirect("/administrador?error=config")
-  }
-
-  const cookieStore = await cookies()
-
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 8,
-  })
-
-  redirect("/administrador")
-}
-
-async function cerrarSesion() {
-  "use server"
-
-  const cookieStore = await cookies()
-
-  cookieStore.delete(COOKIE_NAME)
-
-  redirect("/administrador")
-}
-
-async function crearMatriculado(formData: FormData) {
-  "use server"
-
-  if (!(await estaAutorizado())) {
-    redirect("/administrador")
-  }
-
-  const apellidoNombre = String(
-    formData.get("apellido_nombre") ?? ""
-  ).trim()
-
-  const dni = String(
-    formData.get("dni") ?? ""
-  ).trim()
-
-  const especialidad = String(
-    formData.get("especialidad") ?? ""
-  ).trim()
-
-  const localidad = String(
-    formData.get("localidad") ?? ""
-  ).trim()
-
-  const provincia = String(
-    formData.get("provincia") ?? ""
-  ).trim()
-
-  const telefono = String(
-    formData.get("telefono") ?? ""
-  ).trim()
-
-  const fechaEmision = String(
-    formData.get("fecha_emision") ?? ""
-  ).trim()
-
-  const fechaVencimiento = String(
-    formData.get("fecha_vencimiento") ?? ""
-  ).trim()
-
-  if (
-    !apellidoNombre ||
-    !dni ||
-    !especialidad ||
-    !localidad ||
-    !provincia ||
-    !fechaEmision ||
-    !fechaVencimiento
-  ) {
-    redirect(
-      "/administrador?nuevo=1&error=campos"
-    )
-  }
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const { data: existente } = await supabase
-    .from("matriculados")
-    .select("id")
-    .eq("dni", dni)
-    .maybeSingle()
-
-  if (existente) {
-    redirect(
-      "/administrador?nuevo=1&error=dni"
-    )
-  }
-
-  const { data, error } = await supabase
-    .from("matriculados")
-    .insert({
-      apellido_nombre: apellidoNombre,
-      dni,
-      especialidad,
-      localidad,
-      provincia,
-      telefono,
-      fecha_emision: fechaEmision,
-      fecha_vencimiento: fechaVencimiento,
-      estado: "vigente",
-    })
-    .select("id")
-    .single()
-
-  if (error || !data) {
-    console.error(
-      "[RENACLI] Error creando matriculado:",
-      error
-    )
-
-    redirect(
-      "/administrador?nuevo=1&error=guardar"
-    )
-  }
-
-  const { data: numeroRnc, error: errorRnc } =
-    await supabase.rpc(
-      "asignar_matricula_rnc",
-      {
-        p_matriculado_id: data.id,
-      }
-    )
-
-  if (errorRnc || !numeroRnc) {
-    console.error(
-      "[RENACLI] Error generando RNC:",
-      errorRnc
-    )
-
-    redirect(
-      `/administrador?error=rnc&id=${data.id}`
-    )
-  }
-
-  redirect(
-    `/administrador?creado=1&rnc=${encodeURIComponent(
-      String(numeroRnc)
-    )}`
-  )
-}
-
-async function editarMatriculado(
-  formData: FormData
+/**
+ * Obtiene el primer valor existente de una serie
+ * de posibles nombres de columna.
+ */
+function primerValor(
+  fila: Record<string, unknown>,
+  claves: string[],
 ) {
-  "use server"
+  for (const clave of claves) {
+    const valor = fila[clave]
 
-  if (!(await estaAutorizado())) {
-    redirect("/administrador")
-  }
-
-  const id = Number(formData.get("id"))
-
-  const apellidoNombre = String(
-    formData.get("apellido_nombre") ?? ""
-  ).trim()
-
-  const dni = String(
-    formData.get("dni") ?? ""
-  ).trim()
-
-  const telefono = String(
-    formData.get("telefono") ?? ""
-  ).trim()
-
-  const email = String(
-    formData.get("email") ?? ""
-  ).trim()
-
-  const domicilio = String(
-    formData.get("domicilio") ?? ""
-  ).trim()
-
-  const localidad = String(
-    formData.get("localidad") ?? ""
-  ).trim()
-
-  const provincia = String(
-    formData.get("provincia") ?? ""
-  ).trim()
-
-  const especialidad = String(
-    formData.get("especialidad") ?? ""
-  ).trim()
-
-  const fechaEmision = String(
-    formData.get("fecha_emision") ?? ""
-  ).trim()
-
-  const fechaVencimiento = String(
-    formData.get("fecha_vencimiento") ?? ""
-  ).trim()
-
-  const observaciones = String(
-    formData.get("observaciones") ?? ""
-  ).trim()
-
-  if (
-    !id ||
-    !apellidoNombre ||
-    !dni ||
-    !especialidad ||
-    !localidad ||
-    !provincia
-  ) {
-    redirect(
-      "/administrador?error=editar"
-    )
-  }
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const { error } = await supabase
-    .from("matriculados")
-    .update({
-      apellido_nombre: apellidoNombre,
-      dni,
-      telefono,
-      email,
-      domicilio,
-      localidad,
-      provincia,
-      especialidad,
-      fecha_emision:
-        fechaEmision || null,
-      fecha_vencimiento:
-        fechaVencimiento || null,
-      observaciones,
-    })
-    .eq("id", id)
-
-  if (error) {
-    console.error(
-      "[RENACLI] Error editando matriculado:",
-      error
-    )
-
-    redirect(
-      `/administrador?buscar=1&error=editar`
-    )
-  }
-
-  redirect(
-    `/administrador?buscar=1&q=${encodeURIComponent(
-      apellidoNombre
-    )}&mensaje=editado`
-  )
-}
-
-async function renovarMatriculado(
-  formData: FormData
-) {
-  "use server"
-
-  if (!(await estaAutorizado())) {
-    redirect("/administrador")
-  }
-
-  const id = Number(formData.get("id"))
-
-  const fechaRenovacion = String(
-    formData.get("fecha_renovacion") ?? ""
-  ).trim()
-
-  const fechaVencimiento = String(
-    formData.get("fecha_vencimiento") ?? ""
-  ).trim()
-
-  const q = String(
-    formData.get("q") ?? ""
-  )
-
-  if (
-    !id ||
-    !fechaRenovacion ||
-    !fechaVencimiento
-  ) {
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=renovar`
-    )
-  }
-
-  if (fechaVencimiento < fechaRenovacion) {
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&renovar=${id}&error=fechas`
-    )
-  }
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const {
-    data: matriculado,
-    error: errorLectura,
-  } = await supabase
-    .from("matriculados")
-    .select(
-      "id, estado, numero_matricula, fecha_emision"
-    )
-    .eq("id", id)
-    .maybeSingle()
-
-  if (
-    errorLectura ||
-    !matriculado ||
-    !matriculado.numero_matricula ||
-    String(matriculado.estado || "")
-      .toLowerCase()
-      .includes("baja")
-  ) {
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=renovar`
-    )
-  }
-
-  const { error } = await supabase
-    .from("matriculados")
-    .update({
-      /*
-       * Conservamos fecha_emision como la fecha
-       * original de acreditación.
-       * La nueva vigencia se controla con
-       * fecha_vencimiento.
-       */
-      fecha_vencimiento: fechaVencimiento,
-    })
-    .eq("id", id)
-
-  if (error) {
-    console.error(
-      "[RENACLI] Error renovando matrícula:",
-      error
-    )
-
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=renovar`
-    )
-  }
-
-  redirect(
-    `/administrador?buscar=1&q=${encodeURIComponent(
-      q
-    )}&mensaje=renovado`
-  )
-}
-
-async function cambiarEstado(
-  formData: FormData
-) {
-  "use server"
-
-  if (!(await estaAutorizado())) {
-    redirect("/administrador")
-  }
-
-  const id = Number(formData.get("id"))
-  const estado = String(
-    formData.get("estado") ?? ""
-  )
-
-  const q = String(
-    formData.get("q") ?? ""
-  )
-
-  if (
-    !id ||
-    !["vigente", "suspendida"].includes(
-      estado
-    )
-  ) {
-    redirect("/administrador")
-  }
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const { error } = await supabase
-    .from("matriculados")
-    .update({
-      estado,
-    })
-    .eq("id", id)
-
-  if (error) {
-    console.error(
-      "[RENACLI] Error cambiando estado:",
-      error
-    )
-
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=estado`
-    )
-  }
-
-  redirect(
-    `/administrador?buscar=1&q=${encodeURIComponent(
-      q
-    )}&mensaje=estado`
-  )
-}
-
-async function darDeBaja(
-  formData: FormData
-) {
-  "use server"
-
-  if (!(await estaAutorizado())) {
-    redirect("/administrador")
-  }
-
-  const id = Number(formData.get("id"))
-
-  const q = String(
-    formData.get("q") ?? ""
-  )
-
-  if (!id) {
-    redirect("/administrador")
-  }
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const {
-    data: liberado,
-    error: errorLiberar,
-  } = await supabase.rpc(
-    "liberar_matricula_rnc",
-    {
-      p_matriculado_id: id,
+    if (
+      valor !== null &&
+      valor !== undefined &&
+      String(valor).trim() !== ""
+    ) {
+      return String(valor).trim()
     }
-  )
-
-  if (errorLiberar) {
-    console.error(
-      "[RENACLI] Error liberando RNC:",
-      errorLiberar
-    )
-
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=baja`
-    )
   }
 
-  const { error: errorEstado } =
-    await supabase
-      .from("matriculados")
-      .update({
-        estado: "baja",
-      })
-      .eq("id", id)
-
-  if (errorEstado) {
-    console.error(
-      "[RENACLI] Error marcando baja:",
-      errorEstado
-    )
-
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=baja`
-    )
-  }
-
-  redirect(
-    `/administrador?buscar=1&q=${encodeURIComponent(
-      q
-    )}&mensaje=baja&liberado=${
-      liberado ? "1" : "0"
-    }`
-  )
+  return ""
 }
 
-async function buscarMatriculados(
-  termino: string
-): Promise<MatriculadoAdmin[]> {
-  const busqueda = termino.trim()
-
-  if (!busqueda) return []
-
-  const supabase = obtenerSupabaseAdmin()
-
-  const terminoSeguro = busqueda
-    .replace(/,/g, "")
-    .replace(/\(/g, "")
-    .replace(/\)/g, "")
-
-  const { data, error } = await supabase
-    .from("matriculados")
-    .select(
-      `
-        id,
-        numero_matricula,
-        apellido_nombre,
-        dni,
-        telefono,
-        email,
-        domicilio,
-        localidad,
-        provincia,
-        fecha_emision,
-        fecha_vencimiento,
-        estado,
-        especialidad,
-        foto_url,
-        codigo_qr,
-        observaciones
-      `
-    )
-    .or(
-      `numero_matricula.ilike.%${terminoSeguro}%,dni.ilike.%${terminoSeguro}%,apellido_nombre.ilike.%${terminoSeguro}%`
-    )
-    .order("apellido_nombre", {
-      ascending: true,
-    })
-    .limit(50)
-
-  if (error) {
-    console.error(
-      "[RENACLI] Error buscando matriculados:",
-      error
-    )
-
-    return []
-  }
-
-  return (data ?? []) as MatriculadoAdmin[]
-}
-
-async function obtenerMatriculadoPorId(
-  id: number
-): Promise<MatriculadoAdmin | null> {
-  const supabase = obtenerSupabaseAdmin()
-
-  const { data, error } = await supabase
-    .from("matriculados")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle()
-
-  if (error || !data) {
-    return null
-  }
-
-  return data as MatriculadoAdmin
-}
-
-function formatearFecha(
-  fecha: string | null
-) {
-  if (!fecha) return "-"
-
-  const partes =
-    fecha.slice(0, 10).split("-")
-
-  if (partes.length !== 3) {
-    return fecha
-  }
-
-  return `${partes[2]}/${partes[1]}/${partes[0]}`
-}
-
+/**
+ * Convierte el estado almacenado en Supabase
+ * al estado utilizado por la interfaz.
+ */
 function fechaHoyArgentina() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -674,1707 +230,378 @@ function fechaHoyArgentina() {
   }).format(new Date())
 }
 
-function sumarUnAnio(
-  fecha: string | null
-) {
-  if (!fecha) return ""
+function normalizarEstado(
+  valor: string,
+  vencimiento: string,
+): EstadoMatricula {
+  const texto = valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
 
-  const partes = fecha
-    .slice(0, 10)
-    .split("-")
-    .map(Number)
-
-  if (partes.length !== 3) return ""
-
-  const [anio, mes, dia] = partes
-
-  const fechaUtc = new Date(
-    Date.UTC(anio + 1, mes - 1, dia)
-  )
-
-  /*
-   * Si la fecha original es 29/02 y el año siguiente
-   * no es bisiesto, JavaScript salta a marzo.
-   * En ese caso usamos 28/02.
-   */
-  if (
-    mes === 2 &&
-    dia === 29 &&
-    fechaUtc.getUTCMonth() !== 1
-  ) {
-    return `${anio + 1}-02-28`
-  }
-
-  const nuevoAnio = fechaUtc.getUTCFullYear()
-  const nuevoMes = String(
-    fechaUtc.getUTCMonth() + 1
-  ).padStart(2, "0")
-  const nuevoDia = String(
-    fechaUtc.getUTCDate()
-  ).padStart(2, "0")
-
-  return `${nuevoAnio}-${nuevoMes}-${nuevoDia}`
-}
-
-function estadoEfectivo(
-  matriculado: MatriculadoAdmin
-) {
-  const estadoBase = (
-    matriculado.estado || ""
-  ).toLowerCase()
-
-  if (estadoBase.includes("baja")) {
-    return "baja"
-  }
-
-  if (estadoBase.includes("suspend")) {
+  if (texto.includes("suspend")) {
     return "suspendida"
   }
 
   if (
-    matriculado.fecha_vencimiento &&
-    matriculado.fecha_vencimiento.slice(0, 10) <
-      fechaHoyArgentina()
+    texto.includes("baja") ||
+    texto.includes("anulad") ||
+    texto.includes("cancelad")
   ) {
+    return "baja"
+  }
+
+  if (texto.includes("venc")) {
     return "vencida"
   }
 
-  return "vigente"
+  if (
+    texto === "false" ||
+    texto === "no" ||
+    texto.includes("inactiv")
+  ) {
+    return "baja"
+  }
+
+  const esVigente =
+    texto === "true" ||
+    texto === "si" ||
+    texto === "" ||
+    texto.includes("vigente") ||
+    texto.includes("activ") ||
+    texto.includes("habilit")
+
+  if (esVigente) {
+    if (
+      vencimiento &&
+      vencimiento < fechaHoyArgentina()
+    ) {
+      return "vencida"
+    }
+
+    return "vigente"
+  }
+
+  return "vencida"
 }
 
-function diasHastaVencimiento(
-  fecha: string | null
-) {
-  if (!fecha) return null
+/**
+ * Normaliza una fecha recibida desde Supabase.
+ */
+function normalizarFecha(valor: string) {
+  if (!valor) return ""
 
-  const hoy = new Date(
-    `${fechaHoyArgentina()}T00:00:00`
-  )
-  const vencimiento = new Date(
-    `${fecha.slice(0, 10)}T00:00:00`
-  )
+  const iso = valor.slice(0, 10)
 
-  return Math.ceil(
-    (vencimiento.getTime() - hoy.getTime()) /
-      86400000
-  )
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? iso
+    : valor
 }
 
-async function obtenerTodosMatriculados():
-  Promise<MatriculadoAdmin[]> {
-  const supabase = obtenerSupabaseAdmin()
+/**
+ * Nuestra base guarda el nombre completo en:
+ *
+ * apellido_nombre
+ *
+ * La interfaz original de v0 espera:
+ *
+ * apellido
+ * nombre
+ *
+ * Por eso aquí dividimos el texto.
+ */
+function separarApellidoNombre(nombreCompleto: string) {
+  const limpio = nombreCompleto.trim()
 
-  const { data, error } = await supabase
-    .from("matriculados")
-    .select("*")
-    .order("apellido_nombre", {
-      ascending: true,
-    })
+  if (!limpio) {
+    return {
+      apellido: "",
+      nombre: "",
+    }
+  }
 
-  if (error) {
-    console.error(
-      "[RENACLI] Error obteniendo listado:",
-      error
-    )
+  const partes = limpio
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (partes.length === 1) {
+    return {
+      apellido: partes[0],
+      nombre: "",
+    }
+  }
+
+  /**
+   * Por ahora tomamos la primera palabra como apellido
+   * y el resto como nombres.
+   *
+   * Más adelante podemos guardar apellido y nombres
+   * en columnas independientes si lo preferís.
+   */
+  return {
+    apellido: partes[0],
+    nombre: partes.slice(1).join(" "),
+  }
+}
+
+/**
+ * Convierte una fila de matriculados_publicos
+ * al formato utilizado por la web.
+ */
+function mapearFila(
+  fila: Record<string, unknown>,
+): MatriculadoPublico {
+  const fecha_emision = normalizarFecha(
+    primerValor(fila, [
+      "fecha_emision",
+      "fecha_de_emision",
+      "emision",
+      "fecha_alta",
+      "created_at",
+    ]),
+  )
+
+  const fecha_vencimiento = normalizarFecha(
+    primerValor(fila, [
+      "fecha_vencimiento",
+      "fecha_de_vencimiento",
+      "vencimiento",
+      "fecha_baja",
+    ]),
+  )
+
+  const nombreCompleto = primerValor(fila, [
+    "apellido_nombre",
+    "nombre_completo",
+    "apellido_y_nombre",
+  ])
+
+  let apellido = primerValor(fila, [
+    "apellido",
+    "apellidos",
+  ])
+
+  let nombre = primerValor(fila, [
+    "nombre",
+    "nombres",
+  ])
+
+  if ((!apellido || !nombre) && nombreCompleto) {
+    const separado =
+      separarApellidoNombre(nombreCompleto)
+
+    if (!apellido) apellido = separado.apellido
+    if (!nombre) nombre = separado.nombre
+  }
+
+  return {
+    matricula: primerValor(fila, [
+      "numero_matricula",
+      "matricula",
+      "nro_matricula",
+    ]),
+
+    apellido,
+
+    nombre,
+
+    estado: normalizarEstado(
+      primerValor(fila, [
+        "estado",
+        "estado_matricula",
+        "situacion",
+        "vigente",
+        "activo",
+      ]),
+      fecha_vencimiento,
+    ),
+
+    fecha_emision,
+
+    fecha_vencimiento,
+
+    especialidad: primerValor(fila, [
+      "especialidad",
+      "especialidades",
+      "rubro",
+      "categoria",
+    ]),
+
+    localidad: primerValor(fila, [
+      "localidad",
+      "ciudad",
+    ]),
+
+    provincia: primerValor(fila, [
+      "provincia",
+      "estado_provincia",
+    ]),
+
+    telefono: primerValor(fila, [
+      "telefono",
+      "telefono_contacto",
+      "celular",
+    ]),
+
+    foto_url:
+      primerValor(fila, [
+        "foto_url",
+        "foto",
+        "url_foto",
+        "imagen",
+        "avatar_url",
+      ]) || null,
+  }
+}
+
+/**
+ * Busca matriculados en la vista pública de Supabase.
+ *
+ * Por seguridad, actualmente la búsqueda pública
+ * solamente está habilitada por matrícula.
+ */
+export async function buscarMatriculados(
+  termino: string,
+  tipo: TipoBusqueda,
+): Promise<MatriculadoPublico[]> {
+  const busqueda = termino.trim()
+
+  if (!busqueda) return []
+
+  /**
+   * El DNI pertenece a la tabla administrativa privada.
+   * No se consulta desde matriculados_publicos.
+   */
+  if (tipo === "dni") {
     return []
   }
 
-  return (data ?? []) as MatriculadoAdmin[]
-}
+  const supabase = getSupabase()
 
-type Props = {
-  searchParams?: Promise<{
-    error?: string
-    nuevo?: string
-    creado?: string
-    rnc?: string
-    buscar?: string
-    q?: string
-    editar?: string
-    renovar?: string
-    baja?: string
-    mensaje?: string
-    liberado?: string
-    listado?: string
-  }>
-}
+  if (!supabase) {
+    const objetivo = normalizarMatricula(busqueda)
 
-export default async function AdministradorPage({
-  searchParams,
-}: Props) {
-  const parametros = searchParams
-    ? await searchParams
-    : {}
-
-  const autorizado =
-    await estaAutorizado()
-
-  if (!autorizado) {
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#eef5fa",
-          fontFamily:
-            "Arial, sans-serif",
-        }}
-      >
-        <header
-          style={{
-            background: "#0d4f7c",
-            color: "white",
-            padding: "25px 40px",
-            borderBottom:
-              "4px solid #35c4cf",
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              letterSpacing: "4px",
-            }}
-          >
-            RENACLI
-          </h1>
-
-          <p
-            style={{
-              margin: "6px 0 0",
-            }}
-          >
-            Registro Nacional de
-            Climatización y Refrigeración
-          </p>
-        </header>
-
-        <section
-          style={{
-            maxWidth: "480px",
-            margin: "70px auto",
-            padding: "0 20px",
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              border:
-                "1px solid #d7e0e7",
-              borderRadius: "14px",
-              padding: "32px",
-              boxShadow:
-                "0 2px 8px rgba(0,0,0,0.08)",
-            }}
-          >
-            <p
-              style={{
-                color: "#64748b",
-                fontSize: "13px",
-                fontWeight: "bold",
-                letterSpacing: "1px",
-              }}
-            >
-              ACCESO RESTRINGIDO
-            </p>
-
-            <h2
-              style={{
-                marginTop: "8px",
-                color: "#172033",
-              }}
-            >
-              Administración
-            </h2>
-
-            {parametros.error ===
-              "incorrecta" && (
-              <p
-                style={{
-                  color: "#be123c",
-                }}
-              >
-                Contraseña incorrecta.
-              </p>
-            )}
-
-            <form
-              action={iniciarSesion}
-            >
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: "bold",
-                  marginBottom: "8px",
-                }}
-              >
-                Contraseña
-              </label>
-
-              <input
-                name="password"
-                type="password"
-                required
-                style={{
-                  width: "100%",
-                  boxSizing:
-                    "border-box",
-                  padding: "14px",
-                  borderRadius: "8px",
-                  border:
-                    "1px solid #cbd5e1",
-                  marginBottom: "18px",
-                }}
-              />
-
-              <button
-                type="submit"
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  border: 0,
-                  borderRadius: "8px",
-                  background: "#0d5689",
-                  color: "white",
-                  fontWeight: "bold",
-                }}
-              >
-                Ingresar
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+    return MATRICULADOS_EJEMPLO.filter(
+      (m) => m.matricula === objetivo,
     )
   }
 
-  const mostrarNuevo =
-    parametros.nuevo === "1"
+  const variantes =
+    variantesMatricula(busqueda)
 
-  const mostrarBusqueda =
-    parametros.buscar === "1"
-
-  const terminoBusqueda =
-    String(parametros.q ?? "").trim()
-
-  const editarId =
-    Number(parametros.editar ?? 0)
-
-  let matriculadoEditar:
-    MatriculadoAdmin | null = null
-
-  if (editarId) {
-    matriculadoEditar =
-      await obtenerMatriculadoPorId(
-        editarId
-      )
+  if (variantes.length === 0) {
+    return []
   }
 
-  const renovarId =
-    Number(parametros.renovar ?? 0)
+  const filtro = variantes
+    .map(
+      (valor) =>
+        `numero_matricula.eq.${valor}`,
+    )
+    .join(",")
 
-  let matriculadoRenovar:
-    MatriculadoAdmin | null = null
+  const { data, error } = await supabase
+    .from(TABLA)
+    .select("*")
+    .or(filtro)
+    .limit(20)
 
-  if (renovarId) {
-    matriculadoRenovar =
-      await obtenerMatriculadoPorId(
-        renovarId
-      )
+  if (error) {
+    console.error(
+      "[RENACLI] Error al consultar matriculados_publicos:",
+      error,
+    )
+
+    throw new Error(
+      "No se pudo consultar el registro en este momento. Intente nuevamente en unos minutos.",
+    )
   }
 
-  let resultados:
-    MatriculadoAdmin[] = []
+  return (data ?? []).map((fila) =>
+    mapearFila(
+      fila as Record<string, unknown>,
+    ),
+  )
+}
 
-  if (
-    mostrarBusqueda &&
-    terminoBusqueda
-  ) {
-    resultados =
-      await buscarMatriculados(
-        terminoBusqueda
-      )
+/**
+ * Obtiene una ficha individual por matrícula.
+ *
+ * Esta función será utilizada por el enlace
+ * individual que posteriormente tendrá el QR.
+ */
+export async function obtenerMatriculado(
+  matricula: string,
+): Promise<MatriculadoPublico | null> {
+  const valor =
+    decodeURIComponent(matricula).trim()
+
+  if (!valor) return null
+
+  const supabase = getSupabase()
+
+  if (!supabase) {
+    const objetivo =
+      normalizarMatricula(valor)
+
+    return (
+      MATRICULADOS_EJEMPLO.find(
+        (m) => m.matricula === objetivo,
+      ) ?? null
+    )
   }
 
-  const todosMatriculados =
-    await obtenerTodosMatriculados()
+  const variantes =
+    variantesMatricula(valor)
 
-  const vigentes = todosMatriculados.filter(
-    m => estadoEfectivo(m) === "vigente"
-  )
-  const vencidas = todosMatriculados.filter(
-    m => estadoEfectivo(m) === "vencida"
-  )
-  const suspendidas = todosMatriculados.filter(
-    m => estadoEfectivo(m) === "suspendida"
-  )
-  const bajas = todosMatriculados.filter(
-    m => estadoEfectivo(m) === "baja"
-  )
-  const proximasAVencer =
-    todosMatriculados.filter(m => {
-      if (estadoEfectivo(m) !== "vigente") {
-        return false
-      }
-      const dias =
-        diasHastaVencimiento(
-          m.fecha_vencimiento
-        )
-      return (
-        dias !== null &&
-        dias >= 0 &&
-        dias <= 30
+  if (variantes.length === 0) {
+    return null
+  }
+
+  const filtro = variantes
+    .map(
+      (v) =>
+        `numero_matricula.eq.${v}`,
+    )
+    .join(",")
+
+  const { data, error } = await supabase
+    .from(TABLA)
+    .select("*")
+    .or(filtro)
+    .limit(1)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error al obtener matriculado:",
+      error,
+    )
+
+    return null
+  }
+
+  const fila = (data ?? [])[0]
+
+  return fila
+    ? mapearFila(
+        fila as Record<string, unknown>,
       )
-    })
-
-  const listado = String(
-    parametros.listado ?? ""
-  )
-
-  const matriculadosListado =
-    listado === "vigentes"
-      ? vigentes
-      : listado === "vencidas"
-        ? vencidas
-        : listado === "suspendidas"
-          ? suspendidas
-          : listado === "bajas"
-            ? bajas
-            : listado === "proximas"
-              ? proximasAVencer
-              : []
-
-  const tituloListado =
-    listado === "vigentes"
-      ? "Matrículas vigentes"
-      : listado === "vencidas"
-        ? "Matrículas vencidas"
-        : listado === "suspendidas"
-          ? "Matrículas suspendidas"
-          : listado === "bajas"
-            ? "Matrículas dadas de baja"
-            : listado === "proximas"
-              ? "Próximas a vencer (30 días)"
-              : ""
-
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#eef5fa",
-        fontFamily:
-          "Arial, sans-serif",
-      }}
-    >
-      <header
-        style={{
-          background: "#0d4f7c",
-          color: "white",
-          padding: "25px 40px",
-          borderBottom:
-            "4px solid #35c4cf",
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              letterSpacing: "4px",
-            }}
-          >
-            RENACLI
-          </h1>
-
-          <p
-            style={{
-              margin: "6px 0 0",
-            }}
-          >
-            Registro Nacional de
-            Climatización y Refrigeración
-          </p>
-        </div>
-
-        <form action={cerrarSesion}>
-          <button
-            type="submit"
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border:
-                "1px solid white",
-              background:
-                "transparent",
-              color: "white",
-              fontWeight: "bold",
-            }}
-          >
-            Cerrar sesión
-          </button>
-        </form>
-      </header>
-
-      <section
-        style={{
-          maxWidth: "1100px",
-          margin: "40px auto",
-          padding: "0 20px",
-        }}
-      >
-        <p
-          style={{
-            color: "#64748b",
-            fontSize: "13px",
-            fontWeight: "bold",
-            letterSpacing: "1px",
-          }}
-        >
-          ADMINISTRACIÓN
-        </p>
-
-        <h2
-          style={{
-            fontSize: "32px",
-            color: "#172033",
-          }}
-        >
-          Panel de matriculados
-        </h2>
-
-        {parametros.mensaje ===
-          "editado" && (
-          <Aviso
-            texto="Datos actualizados correctamente."
-            tipo="ok"
-          />
-        )}
-
-        {parametros.mensaje ===
-          "estado" && (
-          <Aviso
-            texto="Estado actualizado correctamente."
-            tipo="ok"
-          />
-        )}
-
-        {parametros.mensaje ===
-          "renovado" && (
-          <Aviso
-            texto="Matrícula renovada correctamente. La nueva vigencia ya se calcula automáticamente."
-            tipo="ok"
-          />
-        )}
-
-        {parametros.error ===
-          "renovar" && (
-          <Aviso
-            texto="No fue posible renovar la matrícula."
-            tipo="error"
-          />
-        )}
-
-        {parametros.error ===
-          "fechas" && (
-          <Aviso
-            texto="La fecha de vencimiento no puede ser anterior a la fecha de acreditación."
-            tipo="error"
-          />
-        )}
-
-        {parametros.mensaje ===
-          "baja" && (
-          <Aviso
-            texto={
-              parametros.liberado === "1"
-                ? "Matrícula dada de baja. El número RNC quedó liberado y disponible para una futura asignación."
-                : "El matriculado fue dado de baja."
-            }
-            tipo="ok"
-          />
-        )}
-
-        {parametros.error ===
-          "baja" && (
-          <Aviso
-            texto="No fue posible completar la baja."
-            tipo="error"
-          />
-        )}
-
-        {parametros.error ===
-          "estado" && (
-          <Aviso
-            texto="No fue posible cambiar el estado."
-            tipo="error"
-          />
-        )}
-
-        {matriculadoEditar ? (
-          <div
-            style={tarjeta}
-          >
-            <h3>
-              Editar matriculado
-            </h3>
-
-            <p>
-              Matrícula:{" "}
-              <strong>
-                {matriculadoEditar.numero_matricula ||
-                  "Sin matrícula"}
-              </strong>
-            </p>
-
-            <form
-              action={
-                editarMatriculado
-              }
-            >
-              <input
-                type="hidden"
-                name="id"
-                value={
-                  matriculadoEditar.id
-                }
-              />
-
-              <div
-                style={grilla}
-              >
-                <Campo
-                  nombre="apellido_nombre"
-                  etiqueta="Apellido y nombre"
-                  valor={
-                    matriculadoEditar.apellido_nombre
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="dni"
-                  etiqueta="DNI"
-                  valor={
-                    matriculadoEditar.dni
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="telefono"
-                  etiqueta="Teléfono"
-                  valor={
-                    matriculadoEditar.telefono
-                  }
-                />
-
-                <Campo
-                  nombre="email"
-                  etiqueta="Email"
-                  tipo="email"
-                  valor={
-                    matriculadoEditar.email
-                  }
-                />
-
-                <Campo
-                  nombre="domicilio"
-                  etiqueta="Domicilio"
-                  valor={
-                    matriculadoEditar.domicilio
-                  }
-                />
-
-                <Campo
-                  nombre="localidad"
-                  etiqueta="Localidad"
-                  valor={
-                    matriculadoEditar.localidad
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="provincia"
-                  etiqueta="Provincia"
-                  valor={
-                    matriculadoEditar.provincia
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="especialidad"
-                  etiqueta="Especialidad"
-                  valor={
-                    matriculadoEditar.especialidad
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="fecha_emision"
-                  etiqueta="Fecha de emisión"
-                  tipo="date"
-                  valor={
-                    matriculadoEditar.fecha_emision
-                  }
-                />
-
-                <Campo
-                  nombre="fecha_vencimiento"
-                  etiqueta="Fecha de vencimiento"
-                  tipo="date"
-                  valor={
-                    matriculadoEditar.fecha_vencimiento
-                  }
-                />
-              </div>
-
-              <label
-                style={{
-                  display: "block",
-                  marginTop: "20px",
-                  fontWeight: "bold",
-                }}
-              >
-                Observaciones
-
-                <textarea
-                  name="observaciones"
-                  defaultValue={
-                    matriculadoEditar.observaciones ??
-                    ""
-                  }
-                  rows={4}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    boxSizing:
-                      "border-box",
-                    marginTop: "8px",
-                    padding: "13px",
-                    borderRadius: "8px",
-                    border:
-                      "1px solid #cbd5e1",
-                  }}
-                />
-              </label>
-
-              <div
-                style={botonera}
-              >
-                <button
-                  type="submit"
-                  style={botonAzul}
-                >
-                  Guardar cambios
-                </button>
-
-                <a
-                  href={`/administrador?buscar=1&q=${encodeURIComponent(
-                    terminoBusqueda ||
-                      matriculadoEditar.apellido_nombre ||
-                      ""
-                  )}`}
-                  style={botonBlanco}
-                >
-                  Cancelar
-                </a>
-              </div>
-            </form>
-          </div>
-        ) : matriculadoRenovar ? (
-          <div style={tarjeta}>
-            <h3>Renovar matrícula</h3>
-
-            <p>
-              Técnico:{" "}
-              <strong>
-                {matriculadoRenovar.apellido_nombre ||
-                  "Sin nombre"}
-              </strong>
-            </p>
-
-            <p>
-              Matrícula:{" "}
-              <strong>
-                {matriculadoRenovar.numero_matricula ||
-                  "Sin matrícula"}
-              </strong>
-            </p>
-
-            <div
-              style={{
-                marginTop: "20px",
-                padding: "16px",
-                background: "#f8fafc",
-                border: "1px solid #d7e0e7",
-                borderRadius: "9px",
-              }}
-            >
-              <div>
-                <strong>
-                  Fecha de acreditación original:
-                </strong>{" "}
-                {formatearFecha(
-                  matriculadoRenovar.fecha_emision
-                )}
-              </div>
-
-              <div
-                style={{
-                  marginTop: "8px",
-                  color: "#64748b",
-                }}
-              >
-                Esta fecha original se conserva y no
-                se modifica al renovar.
-              </div>
-            </div>
-
-            <p
-              style={{
-                color: "#64748b",
-                marginTop: "22px",
-                marginBottom: "24px",
-              }}
-            >
-              El sistema propone automáticamente la
-              renovación desde la fecha en que vence
-              actualmente y calcula un año más. Si la
-              renovación se realiza más tarde, podés
-              modificar ambas fechas antes de
-              confirmar.
-            </p>
-
-            <form action={renovarMatriculado}>
-              <input
-                type="hidden"
-                name="id"
-                value={matriculadoRenovar.id}
-              />
-
-              <input
-                type="hidden"
-                name="q"
-                value={
-                  terminoBusqueda ||
-                  matriculadoRenovar.numero_matricula ||
-                  matriculadoRenovar.dni ||
-                  matriculadoRenovar.apellido_nombre ||
-                  ""
-                }
-              />
-
-              <div style={grilla}>
-                <Campo
-                  nombre="fecha_renovacion"
-                  etiqueta="Nueva fecha de renovación"
-                  tipo="date"
-                  valor={
-                    matriculadoRenovar.fecha_vencimiento ||
-                    fechaHoyArgentina()
-                  }
-                  requerido
-                />
-
-                <Campo
-                  nombre="fecha_vencimiento"
-                  etiqueta="Nuevo vencimiento (+ 1 año)"
-                  tipo="date"
-                  valor={sumarUnAnio(
-                    matriculadoRenovar.fecha_vencimiento ||
-                      fechaHoyArgentina()
-                  )}
-                  requerido
-                />
-              </div>
-
-              <div
-                style={{
-                  marginTop: "18px",
-                  padding: "14px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: "9px",
-                  color: "#1e3a8a",
-                }}
-              >
-                Las fechas aparecen precargadas para
-                una renovación anual. Si hubo demora,
-                simplemente cambialas antes de guardar.
-              </div>
-
-              {(
-                matriculadoRenovar.estado || ""
-              )
-                .toLowerCase()
-                .includes("suspend") && (
-                <div
-                  style={{
-                    marginTop: "20px",
-                    padding: "15px",
-                    background: "#fffbeb",
-                    border:
-                      "1px solid #fde68a",
-                    borderRadius: "9px",
-                    color: "#92400e",
-                  }}
-                >
-                  Esta matrícula está suspendida.
-                  Podés renovar la vigencia, pero
-                  continuará SUSPENDIDA hasta que la
-                  rehabilites desde administración.
-                </div>
-              )}
-
-              <div style={botonera}>
-                <button
-                  type="submit"
-                  style={botonVerde}
-                >
-                  Confirmar renovación
-                </button>
-
-                <a
-                  href={`/administrador?buscar=1&q=${encodeURIComponent(
-                    terminoBusqueda ||
-                    matriculadoRenovar.numero_matricula ||
-                    matriculadoRenovar.dni ||
-                    matriculadoRenovar.apellido_nombre ||
-                    ""
-                  )}`}
-                  style={botonBlanco}
-                >
-                  Cancelar
-                </a>
-              </div>
-            </form>
-          </div>
-        ) : mostrarNuevo ? (
-          <div style={tarjeta}>
-            <h3>
-              Nuevo matriculado
-            </h3>
-
-            <form
-              action={
-                crearMatriculado
-              }
-            >
-              <div
-                style={grilla}
-              >
-                <Campo
-                  nombre="apellido_nombre"
-                  etiqueta="Apellido y nombre"
-                  requerido
-                />
-
-                <Campo
-                  nombre="dni"
-                  etiqueta="DNI"
-                  requerido
-                />
-
-                <Campo
-                  nombre="especialidad"
-                  etiqueta="Especialidad"
-                  requerido
-                />
-
-                <Campo
-                  nombre="telefono"
-                  etiqueta="Teléfono"
-                />
-
-                <Campo
-                  nombre="localidad"
-                  etiqueta="Localidad"
-                  requerido
-                />
-
-                <Campo
-                  nombre="provincia"
-                  etiqueta="Provincia"
-                  requerido
-                />
-
-                <Campo
-                  nombre="fecha_emision"
-                  etiqueta="Fecha de emisión"
-                  tipo="date"
-                  requerido
-                />
-
-                <Campo
-                  nombre="fecha_vencimiento"
-                  etiqueta="Fecha de vencimiento"
-                  tipo="date"
-                  requerido
-                />
-              </div>
-
-              <div
-                style={botonera}
-              >
-                <button
-                  style={botonAzul}
-                >
-                  Guardar y generar matrícula
-                </button>
-
-                <a
-                  href="/administrador"
-                  style={botonBlanco}
-                >
-                  Cancelar
-                </a>
-              </div>
-            </form>
-          </div>
-        ) : mostrarBusqueda ? (
-          <>
-            <div style={tarjeta}>
-              <h3>
-                Buscar matriculado
-              </h3>
-
-              <form
-                action="/administrador"
-                method="get"
-              >
-                <input
-                  type="hidden"
-                  name="buscar"
-                  value="1"
-                />
-
-                <div
-                  style={botonera}
-                >
-                  <input
-                    name="q"
-                    defaultValue={
-                      terminoBusqueda
-                    }
-                    placeholder="RNC, DNI, apellido o nombre"
-                    style={{
-                      flex:
-                        "1 1 350px",
-                      padding: "14px",
-                      borderRadius:
-                        "8px",
-                      border:
-                        "1px solid #cbd5e1",
-                    }}
-                  />
-
-                  <button
-                    style={botonAzul}
-                  >
-                    Buscar
-                  </button>
-
-                  <a
-                    href="/administrador"
-                    style={botonBlanco}
-                  >
-                    Volver
-                  </a>
-                </div>
-              </form>
-            </div>
-
-            {resultados.map(
-              matriculado => {
-                const estado =
-                  estadoEfectivo(
-                    matriculado
-                  )
-
-                const suspendida =
-                  estado.includes(
-                    "suspend"
-                  )
-
-                const baja =
-                  estado.includes(
-                    "baja"
-                  )
-
-                const confirmarBaja =
-                  Number(
-                    parametros.baja ??
-                      0
-                  ) ===
-                  matriculado.id
-
-                return (
-                  <div
-                    key={
-                      matriculado.id
-                    }
-                    style={{
-                      ...tarjeta,
-                      marginTop:
-                        "20px",
-                    }}
-                  >
-                    <h3>
-                      {
-                        matriculado.apellido_nombre
-                      }
-                    </h3>
-
-                    <p>
-                      <strong>
-                        {matriculado.numero_matricula ||
-                          "SIN MATRÍCULA"}
-                      </strong>
-                    </p>
-
-                    <div
-                      style={grilla}
-                    >
-                      <Dato
-                        titulo="DNI"
-                        valor={
-                          matriculado.dni
-                        }
-                      />
-
-                      <Dato
-                        titulo="Estado"
-                        valor={
-                          estadoEfectivo(
-                            matriculado
-                          )
-                        }
-                      />
-
-                      <Dato
-                        titulo="Teléfono"
-                        valor={
-                          matriculado.telefono
-                        }
-                      />
-
-                      <Dato
-                        titulo="Especialidad"
-                        valor={
-                          matriculado.especialidad
-                        }
-                      />
-
-                      <Dato
-                        titulo="Localidad"
-                        valor={
-                          matriculado.localidad
-                        }
-                      />
-
-                      <Dato
-                        titulo="Provincia"
-                        valor={
-                          matriculado.provincia
-                        }
-                      />
-
-                      <Dato
-                        titulo="Emisión"
-                        valor={formatearFecha(
-                          matriculado.fecha_emision
-                        )}
-                      />
-
-                      <Dato
-                        titulo="Vencimiento"
-                        valor={formatearFecha(
-                          matriculado.fecha_vencimiento
-                        )}
-                      />
-                    </div>
-
-                    {!baja && (
-                      <div
-                        style={botonera}
-                      >
-                        <a
-                          href={`/administrador?buscar=1&q=${encodeURIComponent(
-                            terminoBusqueda
-                          )}&editar=${
-                            matriculado.id
-                          }`}
-                          style={
-                            botonBlanco
-                          }
-                        >
-                          Editar
-                        </a>
-
-                        <a
-                          href={`/administrador?buscar=1&q=${encodeURIComponent(
-                            terminoBusqueda
-                          )}&renovar=${
-                            matriculado.id
-                          }`}
-                          style={botonVerde}
-                        >
-                          Renovar matrícula
-                        </a>
-
-                        <form
-                          action={
-                            cambiarEstado
-                          }
-                        >
-                          <input
-                            type="hidden"
-                            name="id"
-                            value={
-                              matriculado.id
-                            }
-                          />
-
-                          <input
-                            type="hidden"
-                            name="q"
-                            value={
-                              terminoBusqueda
-                            }
-                          />
-
-                          <input
-                            type="hidden"
-                            name="estado"
-                            value={
-                              suspendida
-                                ? "vigente"
-                                : "suspendida"
-                            }
-                          />
-
-                          <button
-                            type="submit"
-                            style={
-                              suspendida
-                                ? botonVerde
-                                : botonAmarillo
-                            }
-                          >
-                            {suspendida
-                              ? "Rehabilitar"
-                              : "Suspender"}
-                          </button>
-                        </form>
-
-                        <a
-                          href={`/administrador?buscar=1&q=${encodeURIComponent(
-                            terminoBusqueda
-                          )}&baja=${
-                            matriculado.id
-                          }`}
-                          style={
-                            botonRojo
-                          }
-                        >
-                          Dar de baja
-                        </a>
-                      </div>
-                    )}
-
-                    {confirmarBaja &&
-                      !baja && (
-                        <div
-                          style={{
-                            marginTop:
-                              "20px",
-                            padding:
-                              "20px",
-                            background:
-                              "#fff1f2",
-                            border:
-                              "1px solid #fecdd3",
-                            borderRadius:
-                              "10px",
-                          }}
-                        >
-                          <strong>
-                            Confirmar baja
-                          </strong>
-
-                          <p>
-                            Esta acción
-                            dará de baja al
-                            matriculado y
-                            liberará el número{" "}
-                            <strong>
-                              {matriculado.numero_matricula}
-                            </strong>{" "}
-                            para que pueda
-                            asignarse en el
-                            futuro a otra
-                            persona.
-                          </p>
-
-                          <form
-                            action={
-                              darDeBaja
-                            }
-                          >
-                            <input
-                              type="hidden"
-                              name="id"
-                              value={
-                                matriculado.id
-                              }
-                            />
-
-                            <input
-                              type="hidden"
-                              name="q"
-                              value={
-                                terminoBusqueda
-                              }
-                            />
-
-                            <div
-                              style={
-                                botonera
-                              }
-                            >
-                              <button
-                                type="submit"
-                                style={
-                                  botonRojo
-                                }
-                              >
-                                Sí, dar de baja y liberar RNC
-                              </button>
-
-                              <a
-                                href={`/administrador?buscar=1&q=${encodeURIComponent(
-                                  terminoBusqueda
-                                )}`}
-                                style={
-                                  botonBlanco
-                                }
-                              >
-                                Cancelar
-                              </a>
-                            </div>
-                          </form>
-                        </div>
-                      )}
-                  </div>
-                )
-              }
-            )}
-          </>
-        ) : (
-          <>
-            <div style={tarjeta}>
-              <h3>
-                Gestión de matrículas
-              </h3>
-
-              <p>
-                El estado VENCIDA se calcula
-                automáticamente según la fecha de
-                vencimiento. Suspensión y baja
-                continúan siendo administrativas.
-              </p>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit,minmax(170px,1fr))",
-                  gap: "14px",
-                  marginTop: "24px",
-                }}
-              >
-                <Resumen
-                  titulo="Vigentes"
-                  cantidad={vigentes.length}
-                  href="/administrador?listado=vigentes"
-                />
-                <Resumen
-                  titulo="Vencidas"
-                  cantidad={vencidas.length}
-                  href="/administrador?listado=vencidas"
-                />
-                <Resumen
-                  titulo="Suspendidas"
-                  cantidad={suspendidas.length}
-                  href="/administrador?listado=suspendidas"
-                />
-                <Resumen
-                  titulo="Bajas"
-                  cantidad={bajas.length}
-                  href="/administrador?listado=bajas"
-                />
-                <Resumen
-                  titulo="Próximas a vencer"
-                  cantidad={proximasAVencer.length}
-                  href="/administrador?listado=proximas"
-                />
-              </div>
-
-              <div style={botonera}>
-                <a
-                  href="/administrador?nuevo=1"
-                  style={botonAzul}
-                >
-                  + Nuevo matriculado
-                </a>
-
-                <a
-                  href="/administrador?buscar=1"
-                  style={botonBlanco}
-                >
-                  Buscar matriculado
-                </a>
-              </div>
-            </div>
-
-            {tituloListado && (
-              <div
-                style={{
-                  ...tarjeta,
-                  marginTop: "22px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "12px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <h3 style={{ margin: 0 }}>
-                    {tituloListado}
-                  </h3>
-                  <a
-                    href="/administrador"
-                    style={botonBlanco}
-                  >
-                    Cerrar listado
-                  </a>
-                </div>
-
-                {matriculadosListado.length === 0 ? (
-                  <p style={{ marginTop: "22px" }}>
-                    No hay registros en este listado.
-                  </p>
-                ) : (
-                  <div style={{ marginTop: "22px" }}>
-                    {matriculadosListado.map(m => (
-                      <div
-                        key={m.id}
-                        style={{
-                          padding: "16px 0",
-                          borderBottom:
-                            "1px solid #e2e8f0",
-                        }}
-                      >
-                        <strong>
-                          {m.apellido_nombre ||
-                            "Sin nombre"}
-                        </strong>
-                        <div
-                          style={{
-                            marginTop: "5px",
-                            color: "#475569",
-                          }}
-                        >
-                          {m.numero_matricula ||
-                            "SIN MATRÍCULA"}{" "}
-                          · Estado:{" "}
-                          {estadoEfectivo(m)} · Vence:{" "}
-                          {formatearFecha(
-                            m.fecha_vencimiento
-                          )}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: "10px",
-                            display: "flex",
-                            gap: "10px",
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <a
-                            href={`/administrador?buscar=1&q=${encodeURIComponent(
-                              m.numero_matricula ||
-                                m.dni ||
-                                m.apellido_nombre ||
-                                ""
-                            )}`}
-                            style={{
-                              color: "#0d5689",
-                              fontWeight: "bold",
-                              textDecoration: "none",
-                            }}
-                          >
-                            Ver / administrar
-                          </a>
-
-                          {estadoEfectivo(m) !== "baja" && (
-                            <a
-                              href={`/administrador?renovar=${m.id}&q=${encodeURIComponent(
-                                m.numero_matricula ||
-                                  m.dni ||
-                                  m.apellido_nombre ||
-                                  ""
-                              )}`}
-                              style={{
-                                ...botonVerde,
-                                padding: "8px 12px",
-                              }}
-                            >
-                              Renovar matrícula
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </section>
-    </main>
-  )
+    : null
 }
 
-function Campo({
-  nombre,
-  etiqueta,
-  tipo = "text",
-  requerido = false,
-  valor = null,
-}: {
-  nombre: string
-  etiqueta: string
-  tipo?: string
-  requerido?: boolean
-  valor?: string | null
-}) {
-  return (
-    <label
-      style={{
-        fontWeight: "bold",
-      }}
-    >
-      {etiqueta}
-      {requerido ? " *" : ""}
+/**
+ * Convierte YYYY-MM-DD en DD/MM/YYYY.
+ */
+export function formatearFecha(iso: string) {
+  const [anio, mes, dia] =
+    iso.split("-")
 
-      <input
-        name={nombre}
-        type={tipo}
-        required={requerido}
-        defaultValue={
-          tipo === "date" && valor
-            ? valor.slice(0, 10)
-            : valor ?? ""
-        }
-        style={{
-          display: "block",
-          width: "100%",
-          boxSizing: "border-box",
-          marginTop: "8px",
-          padding: "13px",
-          borderRadius: "8px",
-          border:
-            "1px solid #cbd5e1",
-        }}
-      />
-    </label>
-  )
+  if (!anio || !mes || !dia) {
+    return iso
+  }
+
+  return `${dia}/${mes}/${anio}`
 }
 
-function Dato({
-  titulo,
-  valor,
-}: {
-  titulo: string
-  valor: string | null
-}) {
-  return (
-    <div>
-      <strong>
-        {titulo}
-      </strong>
-
-      <div
-        style={{
-          marginTop: "5px",
-        }}
-      >
-        {valor || "-"}
-      </div>
-    </div>
-  )
-}
-
-function Resumen({
-  titulo,
-  cantidad,
-  href,
-}: {
-  titulo: string
-  cantidad: number
-  href: string
-}) {
-  return (
-    <a
-      href={href}
-      style={{
-        display: "block",
-        padding: "18px",
-        border: "1px solid #d7e0e7",
-        borderRadius: "10px",
-        background: "#f8fafc",
-        color: "#172033",
-        textDecoration: "none",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "13px",
-          color: "#64748b",
-          fontWeight: "bold",
-        }}
-      >
-        {titulo}
-      </div>
-      <div
-        style={{
-          fontSize: "30px",
-          fontWeight: "bold",
-          marginTop: "6px",
-        }}
-      >
-        {cantidad}
-      </div>
-    </a>
-  )
-}
-
-function Aviso({
-  texto,
-  tipo,
-}: {
-  texto: string
-  tipo: "ok" | "error"
-}) {
-  return (
-    <div
-      style={{
-        padding: "16px",
-        marginBottom: "22px",
-        borderRadius: "10px",
-        background:
-          tipo === "ok"
-            ? "#ecfdf5"
-            : "#fff1f2",
-        border:
-          tipo === "ok"
-            ? "1px solid #86efac"
-            : "1px solid #fecdd3",
-        color:
-          tipo === "ok"
-            ? "#166534"
-            : "#be123c",
-      }}
-    >
-      {texto}
-    </div>
-  )
-}
-
-const tarjeta = {
-  background: "white",
-  border: "1px solid #d7e0e7",
-  borderRadius: "14px",
-  padding: "30px",
-  boxShadow:
-    "0 2px 5px rgba(0,0,0,.08)",
-}
-
-const grilla = {
-  display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "20px",
-}
-
-const botonera = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap" as const,
-  marginTop: "25px",
-}
-
-const botonAzul = {
-  padding: "13px 20px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#0d5689",
-  color: "white",
-  fontWeight: "bold",
-  textDecoration: "none",
-  cursor: "pointer",
-}
-
-const botonBlanco = {
-  padding: "13px 20px",
-  border:
-    "1px solid #cbd5e1",
-  borderRadius: "8px",
-  background: "white",
-  color: "#334155",
-  fontWeight: "bold",
-  textDecoration: "none",
-  cursor: "pointer",
-}
-
-const botonAmarillo = {
-  padding: "13px 20px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#f59e0b",
-  color: "white",
-  fontWeight: "bold",
-  cursor: "pointer",
-}
-
-const botonVerde = {
-  padding: "13px 20px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#15803d",
-  color: "white",
-  fontWeight: "bold",
-  cursor: "pointer",
-}
-
-const botonRojo = {
-  padding: "13px 20px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#b91c1c",
-  color: "white",
-  fontWeight: "bold",
-  textDecoration: "none",
-  cursor: "pointer",
-}
+export { supabaseConfigurado }
