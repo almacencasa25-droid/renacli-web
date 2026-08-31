@@ -401,6 +401,68 @@ async function crearMatriculado(formData: FormData) {
 }
 
 
+
+async function guardarConfiguracionPublica(
+  formData: FormData
+) {
+  "use server"
+
+  await exigirAdministrador()
+
+  const emailContacto = String(
+    formData.get("email_contacto") ?? ""
+  ).trim()
+
+  const telefonoContacto = String(
+    formData.get("telefono_contacto") ?? ""
+  ).trim()
+
+  const whatsapp = String(
+    formData.get("whatsapp") ?? ""
+  ).trim()
+
+  const horarioAtencion = String(
+    formData.get("horario_atencion") ?? ""
+  ).trim()
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { error } = await supabase
+    .from("configuracion_publica")
+    .upsert(
+      {
+        id: 1,
+        email_contacto:
+          emailContacto,
+        telefono_contacto:
+          telefonoContacto,
+        whatsapp,
+        horario_atencion:
+          horarioAtencion,
+        updated_at:
+          new Date().toISOString(),
+      },
+      {
+        onConflict: "id",
+      }
+    )
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error guardando configuracion publica:",
+      error
+    )
+
+    redirect(
+      "/administrador?config_error=1"
+    )
+  }
+
+  redirect(
+    "/administrador?config_guardada=1"
+  )
+}
+
 async function guardarFotoMatriculado(
   formData: FormData
 ) {
@@ -1134,7 +1196,21 @@ export default async function AdministradorPage({
     await estaAutorizado()
 
   if (!autorizado) {
-    return (
+  
+  const supabaseConfig =
+    obtenerSupabaseAdmin()
+
+  const {
+    data: configuracionPublica,
+  } = await supabaseConfig
+    .from("configuracion_publica")
+    .select(
+      "email_contacto, telefono_contacto, whatsapp, horario_atencion"
+    )
+    .eq("id", 1)
+    .maybeSingle()
+
+  return (
       <main
         style={{
           minHeight: "100vh",
@@ -1552,6 +1628,146 @@ export default async function AdministradorPage({
             tipo="error"
           />
         )}
+
+        {parametros.config_guardada ===
+          "1" && (
+          <Aviso
+            texto="Datos de contacto públicos actualizados correctamente."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.config_error ===
+          "1" && (
+          <Aviso
+            texto="No fue posible guardar los datos de contacto públicos."
+            tipo="error"
+          />
+        )}
+
+        <details
+          style={{
+            ...tarjeta,
+            marginBottom: "24px",
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              fontWeight: "bold",
+              fontSize: "18px",
+              color: "#172033",
+            }}
+          >
+            Datos de contacto públicos
+          </summary>
+
+          <p
+            style={{
+              color: "#64748b",
+              lineHeight: 1.5,
+              marginTop: "14px",
+            }}
+          >
+            Estos datos podrán mostrarse
+            en las páginas públicas de
+            RENACLI. Podés modificarlos
+            desde aquí sin entrar al
+            código del sitio.
+          </p>
+
+          <form
+            action={
+              guardarConfiguracionPublica
+            }
+            style={{
+              marginTop: "18px",
+            }}
+          >
+            <div style={grilla}>
+              <label>
+                <span style={etiqueta}>
+                  Correo electrónico
+                </span>
+                <input
+                  name="email_contacto"
+                  type="email"
+                  defaultValue={
+                    configuracionPublica
+                      ?.email_contacto ??
+                    ""
+                  }
+                  placeholder="contacto@renacli..."
+                  style={campo}
+                />
+              </label>
+
+              <label>
+                <span style={etiqueta}>
+                  Teléfono
+                </span>
+                <input
+                  name="telefono_contacto"
+                  type="text"
+                  defaultValue={
+                    configuracionPublica
+                      ?.telefono_contacto ??
+                    ""
+                  }
+                  placeholder="Ej.: 11 1234-5678"
+                  style={campo}
+                />
+              </label>
+
+              <label>
+                <span style={etiqueta}>
+                  WhatsApp
+                </span>
+                <input
+                  name="whatsapp"
+                  type="text"
+                  defaultValue={
+                    configuracionPublica
+                      ?.whatsapp ??
+                    ""
+                  }
+                  placeholder="Ej.: 5491112345678"
+                  style={campo}
+                />
+              </label>
+
+              <label>
+                <span style={etiqueta}>
+                  Horario de atención
+                </span>
+                <input
+                  name="horario_atencion"
+                  type="text"
+                  defaultValue={
+                    configuracionPublica
+                      ?.horario_atencion ??
+                    ""
+                  }
+                  placeholder="Ej.: Lunes a viernes de 9 a 18 hs"
+                  style={campo}
+                />
+              </label>
+            </div>
+
+            <div
+              style={{
+                marginTop: "18px",
+              }}
+            >
+              <button
+                type="submit"
+                style={botonAzul}
+              >
+                Guardar datos de contacto
+              </button>
+            </div>
+          </form>
+        </details>
 
         {matriculadoEditar ? (
           <div
