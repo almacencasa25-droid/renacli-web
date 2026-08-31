@@ -1702,7 +1702,14 @@ export default async function AdministradorPage({
                     ""
                   }
                   placeholder="contacto@renacli..."
-                  style={campo}
+                  style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "white",
+                }}
                 />
               </label>
 
@@ -1724,7 +1731,14 @@ export default async function AdministradorPage({
                     ""
                   }
                   placeholder="Ej.: 11 1234-5678"
-                  style={campo}
+                  style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "white",
+                }}
                 />
               </label>
 
@@ -1746,7 +1760,14 @@ export default async function AdministradorPage({
                     ""
                   }
                   placeholder="Ej.: 5491112345678"
-                  style={campo}
+                  style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "white",
+                }}
                 />
               </label>
 
@@ -1768,7 +1789,14 @@ export default async function AdministradorPage({
                     ""
                   }
                   placeholder="Ej.: Lunes a viernes de 9 a 18 hs"
-                  style={campo}
+                  style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "white",
+                }}
                 />
               </label>
             </div>
