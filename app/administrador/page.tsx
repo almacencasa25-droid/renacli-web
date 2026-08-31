@@ -2131,6 +2131,102 @@ export default async function AdministradorPage({
                     </p>
 
                     <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "18px",
+                        flexWrap: "wrap",
+                        margin: "18px 0 22px",
+                        padding: "16px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      {matriculado.foto_url ? (
+                        <img
+                          src={matriculado.foto_url}
+                          alt={`Foto de ${
+                            matriculado.apellido_nombre ||
+                            "matriculado"
+                          }`}
+                          style={{
+                            width: "120px",
+                            height: "145px",
+                            objectFit: "cover",
+                            borderRadius: "12px",
+                            border:
+                              "1px solid #cbd5e1",
+                            background: "white",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "120px",
+                            height: "145px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                            padding: "10px",
+                            borderRadius: "12px",
+                            border:
+                              "1px dashed #94a3b8",
+                            background: "white",
+                            color: "#64748b",
+                            fontWeight: "bold",
+                            fontSize: "13px",
+                          }}
+                        >
+                          Sin foto cargada
+                        </div>
+                      )}
+
+                      <div>
+                        <p
+                          style={{
+                            margin: "0 0 6px",
+                            fontWeight: "bold",
+                            color: "#172033",
+                          }}
+                        >
+                          Foto del matriculado
+                        </p>
+
+                        <p
+                          style={{
+                            margin: 0,
+                            color:
+                              matriculado.foto_url
+                                ? "#15803d"
+                                : "#b45309",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {matriculado.foto_url
+                            ? "Foto cargada"
+                            : "Falta cargar foto"}
+                        </p>
+
+                        <p
+                          style={{
+                            margin: "6px 0 0",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            maxWidth: "310px",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          Revisá que el rostro esté
+                          centrado y que la imagen sea
+                          adecuada para la credencial.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
                       style={grilla}
                     >
                       <Dato
