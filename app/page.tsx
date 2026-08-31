@@ -1,3 +1,4 @@
+import Link from "next/link"
 import {
   QrCode,
   ShieldCheck,
@@ -148,12 +149,21 @@ export default function Home() {
             })}
           </div>
 
-          <p className="mt-6 rounded-lg border border-border bg-muted/60 px-4 py-3 text-xs leading-relaxed text-muted-foreground text-pretty">
-            Aviso: la información exhibida proviene del registro oficial de
-            RENACLI. Por razones de privacidad no se publican el DNI, el
-            domicilio particular, el correo electrónico ni las observaciones
-            administrativas del matriculado.
-          </p>
+          <div className="mt-6 space-y-3">
+            <p className="rounded-lg border border-border bg-muted/60 px-4 py-3 text-xs leading-relaxed text-muted-foreground text-pretty">
+              Aviso: la información exhibida proviene del registro de RENACLI.
+              Por razones de privacidad no se publican el DNI, el domicilio
+              particular, el correo electrónico ni las observaciones
+              administrativas del matriculado.
+            </p>
+
+            <p className="rounded-lg border border-border bg-muted/60 px-4 py-3 text-xs leading-relaxed text-muted-foreground text-pretty">
+              RENACLI es un sistema privado de evaluación, acreditación y
+              registro. Su matrícula no sustituye habilitaciones, licencias,
+              matrículas o registros exigidos por autoridades competentes
+              cuando correspondan.
+            </p>
+          </div>
         </section>
 
         <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
@@ -224,6 +234,15 @@ export default function Home() {
                 </details>
               )
             })}
+          </div>
+
+          <div className="mt-6">
+            <Link
+              href="/reglamento"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Ver Reglamento General RENACLI
+            </Link>
           </div>
         </section>
       </main>
