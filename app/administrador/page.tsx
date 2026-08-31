@@ -407,7 +407,9 @@ async function guardarConfiguracionPublica(
 ) {
   "use server"
 
-  await exigirAdministrador()
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
 
   const emailContacto = String(
     formData.get("email_contacto") ?? ""
