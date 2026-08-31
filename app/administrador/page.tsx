@@ -23,6 +23,12 @@ type MatriculadoAdmin = {
   foto_url: string | null
   codigo_qr: string | null
   observaciones: string | null
+  acepta_reglamento: boolean
+  acepta_privacidad: boolean
+  autoriza_publicacion: boolean
+  fecha_aceptacion_terminos: string | null
+  version_reglamento: string | null
+  version_privacidad: string | null
 }
 
 function obtenerTokenAdministrador() {
@@ -997,7 +1003,13 @@ async function buscarMatriculados(
         especialidad,
         foto_url,
         codigo_qr,
-        observaciones
+        observaciones,
+        acepta_reglamento,
+        acepta_privacidad,
+        autoriza_publicacion,
+        fecha_aceptacion_terminos,
+        version_reglamento,
+        version_privacidad
       `
     )
     .or(
@@ -1036,6 +1048,18 @@ async function obtenerMatriculadoPorId(
   }
 
   return data as MatriculadoAdmin
+}
+
+function consentimientoAceptado(
+  matriculado: MatriculadoAdmin
+) {
+  return Boolean(
+    matriculado.acepta_reglamento &&
+      matriculado.acepta_privacidad &&
+      matriculado.fecha_aceptacion_terminos &&
+      matriculado.version_reglamento &&
+      matriculado.version_privacidad
+  )
 }
 
 function formatearFecha(
@@ -2489,6 +2513,165 @@ export default async function AdministradorPage({
                           adecuada para la credencial.
                         </p>
                       </div>
+                    </div>
+
+                    <div
+                      style={{
+                        margin: "0 0 22px",
+                        padding: "16px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        background: consentimientoAceptado(
+                          matriculado
+                        )
+                          ? "#f0fdf4"
+                          : "#fffbeb",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            "space-between",
+                          gap: "12px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#64748b",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              textTransform:
+                                "uppercase",
+                              letterSpacing:
+                                "0.06em",
+                            }}
+                          >
+                            Consentimiento del técnico
+                          </p>
+
+                          <p
+                            style={{
+                              margin: "5px 0 0",
+                              fontWeight: "bold",
+                              color: "#172033",
+                            }}
+                          >
+                            {consentimientoAceptado(
+                              matriculado
+                            )
+                              ? "Consentimiento aceptado"
+                              : "Consentimiento pendiente"}
+                          </p>
+                        </div>
+
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            borderRadius: "999px",
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            background:
+                              consentimientoAceptado(
+                                matriculado
+                              )
+                                ? "#dcfce7"
+                                : "#fef3c7",
+                            color:
+                              consentimientoAceptado(
+                                matriculado
+                              )
+                                ? "#166534"
+                                : "#92400e",
+                          }}
+                        >
+                          {consentimientoAceptado(
+                            matriculado
+                          )
+                            ? "ACEPTADO"
+                            : "PENDIENTE"}
+                        </span>
+                      </div>
+
+                      {consentimientoAceptado(
+                        matriculado
+                      ) ? (
+                        <div
+                          style={{
+                            marginTop: "12px",
+                            display: "grid",
+                            gap: "6px",
+                            color: "#475569",
+                            fontSize: "13px",
+                          }}
+                        >
+                          <div>
+                            Reglamento:{" "}
+                            <strong>
+                              v
+                              {
+                                matriculado.version_reglamento
+                              }
+                            </strong>
+                          </div>
+
+                          <div>
+                            Privacidad:{" "}
+                            <strong>
+                              v
+                              {
+                                matriculado.version_privacidad
+                              }
+                            </strong>
+                          </div>
+
+                          <div>
+                            Publicación de datos:{" "}
+                            <strong>
+                              {matriculado.autoriza_publicacion
+                                ? "Autorizada"
+                                : "No autorizada"}
+                            </strong>
+                          </div>
+
+                          <div>
+                            Fecha de aceptación:{" "}
+                            <strong>
+                              {matriculado.fecha_aceptacion_terminos
+                                ? new Date(
+                                    matriculado.fecha_aceptacion_terminos
+                                  ).toLocaleString(
+                                    "es-AR",
+                                    {
+                                      timeZone:
+                                        "America/Argentina/Buenos_Aires",
+                                    }
+                                  )
+                                : "-"}
+                            </strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <p
+                          style={{
+                            margin: "10px 0 0",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          El técnico todavía no
+                          registró personalmente la
+                          aceptación del Reglamento y
+                          de la Política de Privacidad.
+                        </p>
+                      )}
                     </div>
 
                     <div
