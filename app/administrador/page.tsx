@@ -169,6 +169,89 @@ async function crearMatriculado(formData: FormData) {
     )
   }
 
+  const archivoFoto =
+    formData.get("foto")
+
+  const fotoCapturada = String(
+    formData.get("foto_capturada") ?? ""
+  ).trim()
+
+  let fotoBytes: Uint8Array | null = null
+  let fotoContentType = ""
+  let fotoExtension = ""
+
+  if (
+    archivoFoto instanceof File &&
+    archivoFoto.size > 0
+  ) {
+    const tiposPermitidos = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]
+
+    if (
+      !tiposPermitidos.includes(
+        archivoFoto.type
+      ) ||
+      archivoFoto.size >
+        10 * 1024 * 1024
+    ) {
+      redirect(
+        "/administrador?nuevo=1&error=foto"
+      )
+    }
+
+    fotoBytes = new Uint8Array(
+      await archivoFoto.arrayBuffer()
+    )
+
+    fotoContentType =
+      archivoFoto.type
+
+    fotoExtension =
+      archivoFoto.type ===
+      "image/png"
+        ? "png"
+        : archivoFoto.type ===
+            "image/webp"
+          ? "webp"
+          : "jpg"
+  } else if (
+    fotoCapturada.startsWith(
+      "data:image/jpeg;base64,"
+    )
+  ) {
+    const base64 =
+      fotoCapturada.split(",")[1]
+
+    if (!base64) {
+      redirect(
+        "/administrador?nuevo=1&error=foto"
+      )
+    }
+
+    const buffer = Buffer.from(
+      base64,
+      "base64"
+    )
+
+    if (
+      buffer.length >
+      10 * 1024 * 1024
+    ) {
+      redirect(
+        "/administrador?nuevo=1&error=foto"
+      )
+    }
+
+    fotoBytes =
+      new Uint8Array(buffer)
+    fotoContentType =
+      "image/jpeg"
+    fotoExtension = "jpg"
+  }
+
   const supabase = obtenerSupabaseAdmin()
 
   const { data: existente } = await supabase
@@ -208,6 +291,87 @@ async function crearMatriculado(formData: FormData) {
     redirect(
       "/administrador?nuevo=1&error=guardar"
     )
+  }
+
+  if (
+    fotoBytes &&
+    fotoContentType &&
+    fotoExtension
+  ) {
+    const nombreFoto =
+      `${data.id}/foto-${Date.now()}.${fotoExtension}`
+
+    const {
+      error: errorSubidaFoto,
+    } = await supabase.storage
+      .from("fotos-matriculados")
+      .upload(
+        nombreFoto,
+        fotoBytes,
+        {
+          contentType:
+            fotoContentType,
+          upsert: false,
+        }
+      )
+
+    if (errorSubidaFoto) {
+      console.error(
+        "[RENACLI] Error subiendo foto del alta:",
+        errorSubidaFoto
+      )
+
+      await supabase
+        .from("matriculados")
+        .delete()
+        .eq("id", data.id)
+
+      redirect(
+        "/administrador?nuevo=1&error=foto"
+      )
+    }
+
+    const { data: urlFoto } =
+      supabase.storage
+        .from(
+          "fotos-matriculados"
+        )
+        .getPublicUrl(
+          nombreFoto
+        )
+
+    const {
+      error:
+        errorActualizarFoto,
+    } = await supabase
+      .from("matriculados")
+      .update({
+        foto_url:
+          urlFoto.publicUrl,
+      })
+      .eq("id", data.id)
+
+    if (errorActualizarFoto) {
+      console.error(
+        "[RENACLI] Error guardando foto_url del alta:",
+        errorActualizarFoto
+      )
+
+      await supabase.storage
+        .from(
+          "fotos-matriculados"
+        )
+        .remove([nombreFoto])
+
+      await supabase
+        .from("matriculados")
+        .delete()
+        .eq("id", data.id)
+
+      redirect(
+        "/administrador?nuevo=1&error=foto"
+      )
+    }
   }
 
   const { data: numeroRnc, error: errorRnc } =
@@ -1842,6 +2006,10 @@ export default async function AdministradorPage({
                   requerido
                 />
               </div>
+
+              <FotoMatriculado
+                modo="alta"
+              />
 
               <div
                 style={botonera}
