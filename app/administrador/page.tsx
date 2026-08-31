@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import FotoMatriculado from "../../components/foto-matriculado"
+import ClaveAppTecnico from "../../components/clave-app-tecnico"
 
 const COOKIE_NAME = "renacli_admin_session"
 
@@ -407,6 +408,79 @@ async function crearMatriculado(formData: FormData) {
 }
 
 
+
+type EstadoClaveApp = {
+  ok: boolean
+  mensaje: string
+}
+
+async function guardarClaveAppTecnico(
+  _estadoAnterior: EstadoClaveApp,
+  formData: FormData
+): Promise<EstadoClaveApp> {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    return {
+      ok: false,
+      mensaje: "Sesión de administrador no válida.",
+    }
+  }
+
+  const matriculadoId = Number(
+    formData.get("matriculado_id")
+  )
+  const clave = String(
+    formData.get("clave") ?? ""
+  ).trim()
+
+  if (
+    !Number.isInteger(matriculadoId) ||
+    matriculadoId <= 0
+  ) {
+    return {
+      ok: false,
+      mensaje: "Matriculado inválido.",
+    }
+  }
+
+  if (clave.length < 6) {
+    return {
+      ok: false,
+      mensaje:
+        "La clave debe tener al menos 6 caracteres.",
+    }
+  }
+
+  const supabase = crearClientePrivado()
+
+  const { error } = await supabase.rpc(
+    "guardar_clave_app_tecnico",
+    {
+      p_matriculado_id: matriculadoId,
+      p_clave: clave,
+    }
+  )
+
+  if (error) {
+    console.error(
+      "Error al guardar clave app técnico:",
+      error
+    )
+
+    return {
+      ok: false,
+      mensaje:
+        "No se pudo guardar la clave. Revisá la configuración de Supabase.",
+    }
+  }
+
+  return {
+    ok: true,
+    mensaje:
+      "Clave guardada correctamente. Entregásela al técnico; RENACLI no conserva la clave visible.",
+  }
+}
 
 async function guardarConfiguracionPublica(
   formData: FormData
@@ -2673,6 +2747,15 @@ export default async function AdministradorPage({
                         </p>
                       )}
                     </div>
+
+                    <ClaveAppTecnico
+                      matriculadoId={matriculado.id}
+                      numeroMatricula={
+                        matriculado.numero_matricula ??
+                        "Sin matrícula"
+                      }
+                      action={guardarClaveAppTecnico}
+                    />
 
                     <div
                       style={grilla}
