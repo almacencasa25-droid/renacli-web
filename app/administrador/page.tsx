@@ -452,7 +452,7 @@ async function guardarClaveAppTecnico(
     }
   }
 
-  const supabase = crearClienteSupabase()
+  const supabase = obtenerSupabaseAdmin()
 
   const { error } = await supabase.rpc(
     "guardar_clave_app_tecnico",
