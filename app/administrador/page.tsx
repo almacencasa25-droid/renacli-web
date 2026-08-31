@@ -1685,7 +1685,12 @@ export default async function AdministradorPage({
           >
             <div style={grilla}>
               <label>
-                <span style={etiqueta}>
+                <span style={{
+                  display: "block",
+                  fontWeight: "bold",
+                  marginBottom: "8px",
+                  color: "#334155",
+                }}>
                   Correo electrónico
                 </span>
                 <input
@@ -1702,7 +1707,12 @@ export default async function AdministradorPage({
               </label>
 
               <label>
-                <span style={etiqueta}>
+                <span style={{
+                  display: "block",
+                  fontWeight: "bold",
+                  marginBottom: "8px",
+                  color: "#334155",
+                }}>
                   Teléfono
                 </span>
                 <input
@@ -1719,7 +1729,12 @@ export default async function AdministradorPage({
               </label>
 
               <label>
-                <span style={etiqueta}>
+                <span style={{
+                  display: "block",
+                  fontWeight: "bold",
+                  marginBottom: "8px",
+                  color: "#334155",
+                }}>
                   WhatsApp
                 </span>
                 <input
@@ -1736,7 +1751,12 @@ export default async function AdministradorPage({
               </label>
 
               <label>
-                <span style={etiqueta}>
+                <span style={{
+                  display: "block",
+                  fontWeight: "bold",
+                  marginBottom: "8px",
+                  color: "#334155",
+                }}>
                   Horario de atención
                 </span>
                 <input
