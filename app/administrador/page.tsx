@@ -1196,20 +1196,6 @@ export default async function AdministradorPage({
     await estaAutorizado()
 
   if (!autorizado) {
-  
-  const supabaseConfig =
-    obtenerSupabaseAdmin()
-
-  const {
-    data: configuracionPublica,
-  } = await supabaseConfig
-    .from("configuracion_publica")
-    .select(
-      "email_contacto, telefono_contacto, whatsapp, horario_atencion"
-    )
-    .eq("id", 1)
-    .maybeSingle()
-
   return (
       <main
         style={{
@@ -1345,6 +1331,19 @@ export default async function AdministradorPage({
       </main>
     )
   }
+
+  const supabaseConfig =
+    obtenerSupabaseAdmin()
+
+  const {
+    data: configuracionPublica,
+  } = await supabaseConfig
+    .from("configuracion_publica")
+    .select(
+      "email_contacto, telefono_contacto, whatsapp, horario_atencion"
+    )
+    .eq("id", 1)
+    .maybeSingle()
 
   const mostrarNuevo =
     parametros.nuevo === "1"
