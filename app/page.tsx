@@ -141,7 +141,7 @@ export default function Home() {
               </p>
 
               <a
-                href="https://renacli-credencial.vercel.app"
+                href="https://renacli-credencial.vercel.app/instalar"
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
               >
                 <Smartphone
