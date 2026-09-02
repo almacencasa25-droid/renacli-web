@@ -62,7 +62,7 @@ export const ESTADOS: Record<
 > = {
   vigente: {
     etiqueta: "MATRÍCULA VIGENTE",
-    descripcion: "El técnico se encuentra habilitado para ejercer.",
+    descripcion: "La matrícula se encuentra registrada y vigente dentro del sistema RENACLI.",
     tono: "success",
   },
 
