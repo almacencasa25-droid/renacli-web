@@ -69,14 +69,14 @@ export const ESTADOS: Record<
   vencida: {
     etiqueta: "MATRÍCULA VENCIDA",
     descripcion:
-      "La matrícula no fue renovada. El técnico no se encuentra habilitado.",
+      "La matrícula se encuentra vencida dentro del sistema RENACLI.",
     tono: "warning",
   },
 
   suspendida: {
     etiqueta: "MATRÍCULA SUSPENDIDA",
     descripcion:
-      "La habilitación se encuentra suspendida por resolución del registro.",
+      "La matrícula se encuentra suspendida dentro del sistema RENACLI.",
     tono: "destructive",
   },
 
