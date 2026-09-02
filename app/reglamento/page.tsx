@@ -101,10 +101,14 @@ const SECCIONES = [
     ],
   },
   {
-    titulo: "13. Baja definitiva",
+    titulo: "13. Baja y baja definitiva",
     parrafos: [
       "Podrán constituir causas de baja la falsificación de documentación, la obtención fraudulenta de la matrícula, la cesión deliberada de la credencial a terceros, la suplantación de identidad, la reincidencia en incumplimientos graves, la utilización de RENACLI para engañar a consumidores, la realización comprobada de prácticas gravemente inseguras o continuar presentándose deliberadamente como vigente durante una suspensión.",
-      "Salvo situaciones excepcionales debidamente justificadas, la baja deberá producirse después del procedimiento de revisión y descargo.",
+      "Salvo situaciones excepcionales debidamente justificadas, la baja por causas disciplinarias deberá producirse después del procedimiento de revisión y descargo.",
+      "La matrícula RNC asignada será única para su titular mientras mantenga la continuidad de su registro y cumpla las condiciones de renovación establecidas por RENACLI.",
+      "La falta de renovación durante cinco (5) años consecutivos contados desde la fecha de vencimiento de la última vigencia podrá producir la baja definitiva por falta de renovación.",
+      "Hasta que se cumpla dicho plazo de cinco (5) años consecutivos, el número RNC permanecerá reservado para su titular y no podrá ser asignado a otra persona.",
+      "Producida la baja definitiva por falta de renovación y cumplido el plazo indicado, RENACLI podrá liberar el número RNC para una futura reasignación a otro técnico.",
     ],
   },
   {
@@ -112,7 +116,9 @@ const SECCIONES = [
     parrafos: [
       "Cuando una matrícula sea dada de baja, el QR deberá informar DADA DE BAJA / NO VIGENTE.",
       "La credencial dejará de acreditar al titular dentro de RENACLI.",
-      "RENACLI podrá conservar internamente el historial administrativo de la matrícula conforme a las reglas legales aplicables sobre conservación y protección de datos.",
+      "La baja común no libera el número RNC asignado. El número permanecerá reservado mientras no se cumplan cinco (5) años consecutivos sin renovación desde la fecha de vencimiento de la última vigencia.",
+      "Cuando corresponda una baja definitiva por falta de renovación y el número sea liberado, RENACLI podrá reasignarlo a un nuevo titular. La reasignación no implica continuidad, identidad ni relación entre el nuevo titular y cualquier titular anterior de ese número.",
+      "RENACLI podrá conservar internamente el historial administrativo y de asignaciones anteriores conforme a las reglas legales aplicables sobre conservación y protección de datos, a fin de mantener la trazabilidad de cada período de asignación.",
     ],
   },
   {
@@ -215,7 +221,7 @@ export default function ReglamentoPage() {
               Versión del Reglamento
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Versión 1.0 — Documento inicial sujeto a futuras actualizaciones.
+              Versión 1.1 — Actualizada con las condiciones de continuidad, baja definitiva y reasignación de matrícula RNC.
             </p>
           </div>
 
