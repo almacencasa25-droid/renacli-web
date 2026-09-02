@@ -7,6 +7,7 @@ import {
   PauseCircle,
   UserX,
   RefreshCw,
+  Smartphone,
 } from "lucide-react"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -119,6 +120,42 @@ export default function Home() {
 
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
           <Verificador />
+
+          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-5 sm:p-6">
+            <div className="flex flex-col items-center text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Smartphone
+                  className="size-6"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+              </span>
+
+              <h2 className="mt-3 text-lg font-bold text-foreground">
+                Credencial Digital RENACLI
+              </h2>
+
+              <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+                Si sos técnico matriculado, instalá la Credencial Digital
+                RENACLI en tu teléfono para acceder a tu identificación.
+              </p>
+
+              <a
+                href="https://renacli-credencial.vercel.app"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
+              >
+                <Smartphone
+                  className="size-5"
+                  aria-hidden="true"
+                />
+                Instalar Credencial Digital
+              </a>
+
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Disponible para teléfonos Android y iPhone.
+              </p>
+            </div>
+          </div>
         </div>
 
         <section className="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
