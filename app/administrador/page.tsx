@@ -991,29 +991,6 @@ async function darDeBaja(
 
   const supabase = obtenerSupabaseAdmin()
 
-  const {
-    data: liberado,
-    error: errorLiberar,
-  } = await supabase.rpc(
-    "liberar_matricula_rnc",
-    {
-      p_matriculado_id: id,
-    }
-  )
-
-  if (errorLiberar) {
-    console.error(
-      "[RENACLI] Error liberando RNC:",
-      errorLiberar
-    )
-
-    redirect(
-      `/administrador?buscar=1&q=${encodeURIComponent(
-        q
-      )}&error=baja`
-    )
-  }
-
   const { error: errorEstado } =
     await supabase
       .from("matriculados")
@@ -1038,9 +1015,7 @@ async function darDeBaja(
   redirect(
     `/administrador?buscar=1&q=${encodeURIComponent(
       q
-    )}&mensaje=baja&liberado=${
-      liberado ? "1" : "0"
-    }`
+    )}&mensaje=baja`
   )
 }
 
@@ -1703,11 +1678,7 @@ export default async function AdministradorPage({
         {parametros.mensaje ===
           "baja" && (
           <Aviso
-            texto={
-              parametros.liberado === "1"
-                ? "Matrícula dada de baja. El número RNC quedó liberado y disponible para una futura asignación."
-                : "El matriculado fue dado de baja."
-            }
+            texto="El matriculado fue dado de baja. El número RNC permanece reservado y no se libera."
             tipo="ok"
           />
         )}
