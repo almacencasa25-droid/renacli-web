@@ -3101,6 +3101,8 @@ export default async function AdministradorPage({
                           </form>
                         </div>
   
+                    )}
+
                     {baja &&
                       matriculado.numero_matricula && (
                         <div
@@ -3213,8 +3215,6 @@ export default async function AdministradorPage({
                             )}
                         </div>
                       )}
-
-                    )}
                   </div>
                 )
               }
