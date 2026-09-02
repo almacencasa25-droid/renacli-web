@@ -49,6 +49,7 @@ export type MatriculadoPublico = {
   provincia: string
   telefono: string
   foto_url: string | null
+  autoriza_publicacion: boolean
 }
 
 export const ESTADOS: Record<
@@ -103,6 +104,7 @@ export const MATRICULADOS_EJEMPLO: MatriculadoPublico[] = [
     provincia: "Provincia de ejemplo",
     telefono: "000 000-0000",
     foto_url: null,
+    autoriza_publicacion: true,
   },
 ]
 
@@ -452,6 +454,9 @@ function mapearFila(
         "imagen",
         "avatar_url",
       ]) || null,
+
+    autoriza_publicacion:
+      fila["autoriza_publicacion"] === true,
   }
 }
 
