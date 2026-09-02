@@ -400,9 +400,31 @@ async function crearMatriculado(formData: FormData) {
     )
   }
 
+  const {
+    data: rncDisponibles,
+    error: errorDisponibles,
+  } = await supabase.rpc(
+    "contar_rnc_disponibles"
+  )
+
+  if (errorDisponibles) {
+    console.error(
+      "[RENACLI] Error contando RNC disponibles:",
+      errorDisponibles
+    )
+
+    redirect(
+      `/administrador?creado=1&rnc=${encodeURIComponent(
+        String(numeroRnc)
+      )}`
+    )
+  }
+
   redirect(
     `/administrador?creado=1&rnc=${encodeURIComponent(
       String(numeroRnc)
+    )}&disponibles=${encodeURIComponent(
+      String(rncDisponibles)
     )}`
   )
 }
@@ -1347,6 +1369,7 @@ type Props = {
     nuevo?: string
     creado?: string
     rnc?: string
+    disponibles?: string
     buscar?: string
     q?: string
     editar?: string
@@ -1365,6 +1388,11 @@ export default async function AdministradorPage({
   const parametros = searchParams
     ? await searchParams
     : {}
+
+  const rncDisponibles =
+    parametros.disponibles !== undefined
+      ? Number(parametros.disponibles)
+      : null
 
   const autorizado =
     await estaAutorizado()
@@ -1717,6 +1745,74 @@ export default async function AdministradorPage({
           Panel de matriculados
         </h2>
 
+
+        {parametros.creado === "1" && (
+          <Aviso
+            texto={`Matriculado creado correctamente. Matrícula asignada: ${
+              parametros.rnc || "RNC asignado"
+            }.`}
+            tipo="ok"
+          />
+        )}
+
+        {parametros.creado === "1" &&
+          rncDisponibles !== null &&
+          Number.isFinite(rncDisponibles) &&
+          rncDisponibles >= 11 &&
+          rncDisponibles <= 100 && (
+            <div
+              style={{
+                padding: "16px",
+                marginBottom: "22px",
+                borderRadius: "10px",
+                background: "#fffbeb",
+                border: "1px solid #fbbf24",
+                color: "#92400e",
+                fontWeight: "bold",
+              }}
+            >
+              Atención: quedan {rncDisponibles} matrículas RNC disponibles.
+            </div>
+          )}
+
+        {parametros.creado === "1" &&
+          rncDisponibles !== null &&
+          Number.isFinite(rncDisponibles) &&
+          rncDisponibles >= 1 &&
+          rncDisponibles <= 10 && (
+            <div
+              style={{
+                padding: "16px",
+                marginBottom: "22px",
+                borderRadius: "10px",
+                background: "#fff1f2",
+                border: "1px solid #fb7185",
+                color: "#be123c",
+                fontWeight: "bold",
+              }}
+            >
+              URGENTE: quedan solamente {rncDisponibles} matrículas RNC disponibles.
+              Debe ampliarse el sistema de numeración antes de agotarlas.
+            </div>
+          )}
+
+        {parametros.creado === "1" &&
+          rncDisponibles === 0 && (
+            <div
+              style={{
+                padding: "16px",
+                marginBottom: "22px",
+                borderRadius: "10px",
+                background: "#fff1f2",
+                border: "2px solid #e11d48",
+                color: "#9f1239",
+                fontWeight: "bold",
+              }}
+            >
+              No quedan números RNC disponibles. Debe ampliarse el formato de numeración
+              antes de continuar con nuevas matrículas.
+            </div>
+          )}
 
         {parametros.mensaje ===
           "foto" && (
