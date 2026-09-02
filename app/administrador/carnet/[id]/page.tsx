@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import QRCode from "qrcode"
+import { BotonPdfCarnet } from "@/components/boton-pdf-carnet"
 
 const COOKIE_ADMIN = "renacli_admin_session"
 
@@ -100,9 +101,10 @@ export default async function CarnetPage({ params }: PageProps) {
             Volver al administrador
           </a>
 
-          <p className="text-sm text-slate-600">
-            Para imprimir o guardar como PDF, use Ctrl+P.
-          </p>
+          <BotonPdfCarnet
+            matriculadoId={matriculadoId}
+            numeroMatricula={matriculado.numero_matricula}
+          />
         </div>
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl print:shadow-none">
