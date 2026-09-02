@@ -1019,6 +1019,65 @@ async function darDeBaja(
   )
 }
 
+async function darDeBajaDefinitiva(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  const q = String(
+    formData.get("q") ?? ""
+  )
+
+  if (!id) {
+    redirect("/administrador")
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const {
+    data: liberado,
+    error: errorLiberar,
+  } = await supabase.rpc(
+    "baja_definitiva_matricula_rnc",
+    {
+      p_matriculado_id: id,
+    }
+  )
+
+  if (errorLiberar) {
+    console.error(
+      "[RENACLI] Error en baja definitiva:",
+      errorLiberar
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=baja_definitiva`
+    )
+  }
+
+  if (liberado !== true) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=baja_definitiva_plazo`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=baja_definitiva`
+  )
+}
+
 async function buscarMatriculados(
   termino: string
 ): Promise<MatriculadoAdmin[]> {
@@ -1177,6 +1236,45 @@ function sumarUnAnio(
   return `${nuevoAnio}-${nuevoMes}-${nuevoDia}`
 }
 
+function puedeBajaDefinitiva(
+  fechaVencimiento: string | null
+) {
+  if (!fechaVencimiento) return false
+
+  const partes = fechaVencimiento
+    .slice(0, 10)
+    .split("-")
+    .map(Number)
+
+  if (partes.length !== 3) return false
+
+  const [anio, mes, dia] = partes
+
+  if (
+    !Number.isFinite(anio) ||
+    !Number.isFinite(mes) ||
+    !Number.isFinite(dia)
+  ) {
+    return false
+  }
+
+  const ultimoDiaMes = new Date(
+    Date.UTC(anio + 5, mes, 0)
+  ).getUTCDate()
+
+  const diaAjustado = Math.min(
+    dia,
+    ultimoDiaMes
+  )
+
+  const fechaLiberacion =
+    `${anio + 5}-${String(mes).padStart(2, "0")}-${String(
+      diaAjustado
+    ).padStart(2, "0")}`
+
+  return fechaHoyArgentina() >= fechaLiberacion
+}
+
 function estadoEfectivo(
   matriculado: MatriculadoAdmin
 ) {
@@ -1254,6 +1352,7 @@ type Props = {
     editar?: string
     renovar?: string
     baja?: string
+    baja_definitiva?: string
     mensaje?: string
     liberado?: string
     listado?: string
@@ -1687,6 +1786,30 @@ export default async function AdministradorPage({
           "baja" && (
           <Aviso
             texto="No fue posible completar la baja."
+            tipo="error"
+          />
+        )}
+
+        {parametros.mensaje ===
+          "baja_definitiva" && (
+          <Aviso
+            texto="Baja definitiva realizada. El número RNC fue liberado y ya puede asignarse nuevamente."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "baja_definitiva_plazo" && (
+          <Aviso
+            texto="La baja definitiva no puede realizarse todavía. Deben cumplirse 5 años consecutivos desde el vencimiento."
+            tipo="error"
+          />
+        )}
+
+        {parametros.error ===
+          "baja_definitiva" && (
+          <Aviso
+            texto="No fue posible completar la baja definitiva."
             tipo="error"
           />
         )}
@@ -2440,6 +2563,18 @@ export default async function AdministradorPage({
                   ) ===
                   matriculado.id
 
+                const confirmarBajaDefinitiva =
+                  Number(
+                    parametros.baja_definitiva ??
+                      0
+                  ) ===
+                  matriculado.id
+
+                const habilitaBajaDefinitiva =
+                  puedeBajaDefinitiva(
+                    matriculado.fecha_vencimiento
+                  )
+
                 return (
                   <div
                     key={
@@ -2906,17 +3041,15 @@ export default async function AdministradorPage({
                           </strong>
 
                           <p>
-                            Esta acción
-                            dará de baja al
-                            matriculado y
-                            liberará el número{" "}
+                            Esta acción dará de baja al
+                            matriculado, pero el número{" "}
                             <strong>
                               {matriculado.numero_matricula}
                             </strong>{" "}
-                            para que pueda
-                            asignarse en el
-                            futuro a otra
-                            persona.
+                            permanecerá reservado. No podrá
+                            asignarse a otra persona mientras
+                            no se cumplan 5 años consecutivos
+                            desde el vencimiento.
                           </p>
 
                           <form
@@ -2951,7 +3084,7 @@ export default async function AdministradorPage({
                                   botonRojo
                                 }
                               >
-                                Sí, dar de baja y liberar RNC
+                                Sí, dar de baja
                               </button>
 
                               <a
@@ -2967,7 +3100,121 @@ export default async function AdministradorPage({
                             </div>
                           </form>
                         </div>
+  
+                    {baja &&
+                      matriculado.numero_matricula && (
+                        <div
+                          style={{
+                            marginTop: "20px",
+                            padding: "20px",
+                            background: habilitaBajaDefinitiva
+                              ? "#fff7ed"
+                              : "#f8fafc",
+                            border: habilitaBajaDefinitiva
+                              ? "1px solid #fdba74"
+                              : "1px solid #cbd5e1",
+                            borderRadius: "10px",
+                          }}
+                        >
+                          <strong>
+                            Baja definitiva y liberación del RNC
+                          </strong>
+
+                          <p
+                            style={{
+                              lineHeight: 1.55,
+                            }}
+                          >
+                            {habilitaBajaDefinitiva
+                              ? `Ya se cumplieron 5 años desde el vencimiento. El número ${matriculado.numero_matricula} puede liberarse definitivamente y quedar disponible para otro técnico.`
+                              : `El número ${matriculado.numero_matricula} sigue reservado. Solamente podrá liberarse cuando se cumplan 5 años consecutivos desde el vencimiento.`}
+                          </p>
+
+                          {habilitaBajaDefinitiva &&
+                            !confirmarBajaDefinitiva && (
+                              <a
+                                href={`/administrador?buscar=1&q=${encodeURIComponent(
+                                  terminoBusqueda
+                                )}&baja_definitiva=${
+                                  matriculado.id
+                                }`}
+                                style={botonRojo}
+                              >
+                                Solicitar baja definitiva
+                              </a>
+                            )}
+
+                          {habilitaBajaDefinitiva &&
+                            confirmarBajaDefinitiva && (
+                              <div
+                                style={{
+                                  marginTop: "18px",
+                                  padding: "16px",
+                                  background: "#fff1f2",
+                                  border: "1px solid #fecdd3",
+                                  borderRadius: "9px",
+                                }}
+                              >
+                                <strong>
+                                  Confirmación final
+                                </strong>
+
+                                <p>
+                                  Esta acción liberará el número{" "}
+                                  <strong>
+                                    {matriculado.numero_matricula}
+                                  </strong>{" "}
+                                  y podrá ser asignado en el futuro
+                                  a otra persona. El historial del
+                                  titular anterior permanecerá
+                                  registrado.
+                                </p>
+
+                                <form
+                                  action={
+                                    darDeBajaDefinitiva
+                                  }
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      matriculado.id
+                                    }
+                                  />
+
+                                  <input
+                                    type="hidden"
+                                    name="q"
+                                    value={
+                                      terminoBusqueda
+                                    }
+                                  />
+
+                                  <div style={botonera}>
+                                    <button
+                                      type="submit"
+                                      style={botonRojo}
+                                    >
+                                      Sí, baja definitiva y liberar RNC
+                                    </button>
+
+                                    <a
+                                      href={`/administrador?buscar=1&q=${encodeURIComponent(
+                                        terminoBusqueda
+                                      )}`}
+                                      style={botonBlanco}
+                                    >
+                                      Cancelar
+                                    </a>
+                                  </div>
+                                </form>
+                              </div>
+                            )}
+                        </div>
                       )}
+
+                    )}
                   </div>
                 )
               }
