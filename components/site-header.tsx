@@ -97,9 +97,17 @@ export function SiteHeader() {
           <Link
             href="/privacidad"
             onClick={cerrarMenu}
-            className="block px-5 py-4 text-sm font-semibold transition hover:bg-muted"
+            className="block border-b border-border px-5 py-4 text-sm font-semibold transition hover:bg-muted"
           >
             Política de Privacidad
+          </Link>
+
+          <Link
+            href="/administrador"
+            onClick={cerrarMenu}
+            className="block px-5 py-4 text-sm font-semibold transition hover:bg-muted"
+          >
+            Administración
           </Link>
         </nav>
       ) : null}
