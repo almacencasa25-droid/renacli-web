@@ -716,24 +716,24 @@ export async function GET(
     */
     const {
       error: errorRegistroDocumento,
-    } = await supabase
-      .from("documentos_pdf_renacli")
-      .insert({
-        matriculado_id: matriculado.id,
-        codigo_documento: codigoDocumento,
-        numero_matricula: matriculado.numero_matricula,
-        apellido_nombre:
+    } = await supabase.rpc(
+      "registrar_nuevo_pdf_renacli",
+      {
+        p_matriculado_id: matriculado.id,
+        p_codigo_documento: codigoDocumento,
+        p_numero_matricula: matriculado.numero_matricula,
+        p_apellido_nombre:
           matriculado.apellido_nombre || "Sin nombre",
-        estado: matriculado.estado || "vigente",
-        fecha_emision:
+        p_estado: matriculado.estado || "vigente",
+        p_fecha_emision:
           matriculado.fecha_emision || null,
-        fecha_vencimiento:
+        p_fecha_vencimiento:
           matriculado.fecha_vencimiento || null,
-        codigo_qr: codigo,
-        firma_hmac: firmaCompleta,
-        generado_en: generadoEnIso,
-        activo: true,
-      })
+        p_codigo_qr: codigo,
+        p_firma_hmac: firmaCompleta,
+        p_generado_en: generadoEnIso,
+      },
+    )
 
     if (errorRegistroDocumento) {
       console.error(
