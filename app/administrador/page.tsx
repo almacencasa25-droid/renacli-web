@@ -3574,67 +3574,174 @@ export default async function AdministradorPage({
         ) : (
           <>
             <div style={tarjeta}>
-              <h3>
-                Gestión de matrículas
-              </h3>
-
-              <p>
-                El estado VENCIDA se calcula
-                automáticamente según la fecha de
-                vencimiento. Suspensión y baja
-                continúan siendo administrativas.
-              </p>
-
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "repeat(auto-fit,minmax(170px,1fr))",
-                  gap: "14px",
-                  marginTop: "24px",
+                    "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "24px",
+                  alignItems: "start",
                 }}
               >
-                <Resumen
-                  titulo="Vigentes"
-                  cantidad={vigentes.length}
-                  href="/administrador?listado=vigentes"
-                />
-                <Resumen
-                  titulo="Vencidas"
-                  cantidad={vencidas.length}
-                  href="/administrador?listado=vencidas"
-                />
-                <Resumen
-                  titulo="Suspendidas"
-                  cantidad={suspendidas.length}
-                  href="/administrador?listado=suspendidas"
-                />
-                <Resumen
-                  titulo="Bajas"
-                  cantidad={bajas.length}
-                  href="/administrador?listado=bajas"
-                />
-                <Resumen
-                  titulo="Próximas a vencer"
-                  cantidad={proximasAVencer.length}
-                  href="/administrador?listado=proximas"
-                />
-              </div>
+                <div>
+                  <h3
+                    style={{
+                      marginTop: 0,
+                      marginBottom: "10px",
+                    }}
+                  >
+                    Gestión de matrículas
+                  </h3>
 
-              <div style={botonera}>
-                <a
-                  href="/administrador?nuevo=1"
-                  style={botonAzul}
-                >
-                  + Nuevo matriculado
-                </a>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#475569",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    El estado VENCIDA se calcula
+                    automáticamente según la fecha de
+                    vencimiento. Suspensión y baja
+                    continúan siendo administrativas.
+                  </p>
 
-                <a
-                  href="/administrador?buscar=1"
-                  style={botonBlanco}
+                  <div
+                    style={{
+                      ...botonera,
+                      marginTop: "24px",
+                    }}
+                  >
+                    <a
+                      href="/administrador?nuevo=1"
+                      style={botonAzul}
+                    >
+                      + Nuevo matriculado
+                    </a>
+
+                    <a
+                      href="/administrador?buscar=1"
+                      style={botonBlanco}
+                    >
+                      Buscar matriculado
+                    </a>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    maxWidth: "340px",
+                    width: "100%",
+                    justifySelf: "end",
+                    border: "1px solid #dbe4ec",
+                    borderRadius: "14px",
+                    background: "#f8fafc",
+                    overflow: "hidden",
+                  }}
                 >
-                  Buscar matriculado
-                </a>
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      background: "white",
+                      borderBottom:
+                        "1px solid #e2e8f0",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      color: "#64748b",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Resumen de matrículas
+                  </div>
+
+                  {[
+                    {
+                      titulo: "Vigentes",
+                      cantidad: vigentes.length,
+                      href: "/administrador?listado=vigentes",
+                    },
+                    {
+                      titulo: "Vencidas",
+                      cantidad: vencidas.length,
+                      href: "/administrador?listado=vencidas",
+                    },
+                    {
+                      titulo: "Suspendidas",
+                      cantidad: suspendidas.length,
+                      href: "/administrador?listado=suspendidas",
+                    },
+                    {
+                      titulo: "Bajas",
+                      cantidad: bajas.length,
+                      href: "/administrador?listado=bajas",
+                    },
+                    {
+                      titulo: "Próximas a vencer",
+                      cantidad:
+                        proximasAVencer.length,
+                      href: "/administrador?listado=proximas",
+                    },
+                  ].map(
+                    (
+                      item,
+                      index,
+                      items
+                    ) => (
+                      <a
+                        key={item.titulo}
+                        href={item.href}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            "space-between",
+                          gap: "14px",
+                          padding: "12px 14px",
+                          textDecoration: "none",
+                          color: "#172033",
+                          borderBottom:
+                            index <
+                            items.length - 1
+                              ? "1px solid #e2e8f0"
+                              : "none",
+                          background:
+                            "transparent",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {item.titulo}
+                        </span>
+
+                        <span
+                          style={{
+                            minWidth: "34px",
+                            height: "28px",
+                            padding: "0 8px",
+                            borderRadius: "999px",
+                            display:
+                              "inline-flex",
+                            alignItems: "center",
+                            justifyContent:
+                              "center",
+                            background: "white",
+                            border:
+                              "1px solid #dbe4ec",
+                            fontWeight: "bold",
+                            color: "#0d4f7c",
+                          }}
+                        >
+                          {item.cantidad}
+                        </span>
+                      </a>
+                    )
+                  )}
+                </div>
               </div>
             </div>
 
