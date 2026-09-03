@@ -32,6 +32,19 @@ type MatriculadoAdmin = {
   version_privacidad: string | null
 }
 
+type DocumentoPdfRenacli = {
+  id: number
+  matriculado_id: number
+  codigo_documento: string
+  numero_matricula: string
+  estado: string | null
+  fecha_emision: string | null
+  fecha_vencimiento: string | null
+  generado_en: string
+  activo: boolean
+}
+
+
 function obtenerTokenAdministrador() {
   const password = process.env.RENACLI_ADMIN_PASSWORD
 
@@ -1595,6 +1608,59 @@ export default async function AdministradorPage({
       )
   }
 
+  const documentosPorMatriculado =
+    new Map<number, DocumentoPdfRenacli[]>()
+
+  if (resultados.length > 0) {
+    const idsResultados =
+      resultados.map(
+        matriculado => matriculado.id
+      )
+
+    const supabaseDocumentos =
+      obtenerSupabaseAdmin()
+
+    const {
+      data: documentosPdf,
+      error: errorDocumentosPdf,
+    } = await supabaseDocumentos
+      .from("documentos_pdf_renacli")
+      .select(
+        "id, matriculado_id, codigo_documento, numero_matricula, estado, fecha_emision, fecha_vencimiento, generado_en, activo"
+      )
+      .in(
+        "matriculado_id",
+        idsResultados
+      )
+      .order("generado_en", {
+        ascending: false,
+      })
+
+    if (errorDocumentosPdf) {
+      console.error(
+        "[RENACLI] Error obteniendo documentos PDF:",
+        errorDocumentosPdf
+      )
+    } else {
+      for (
+        const documento of
+        (documentosPdf ?? []) as DocumentoPdfRenacli[]
+      ) {
+        const actuales =
+          documentosPorMatriculado.get(
+            documento.matriculado_id
+          ) ?? []
+
+        actuales.push(documento)
+
+        documentosPorMatriculado.set(
+          documento.matriculado_id,
+          actuales
+        )
+      }
+    }
+  }
+
   const todosMatriculados =
     await obtenerTodosMatriculados()
 
@@ -2671,6 +2737,11 @@ export default async function AdministradorPage({
                     matriculado.fecha_vencimiento
                   )
 
+                const documentosPdf =
+                  documentosPorMatriculado.get(
+                    matriculado.id
+                  ) ?? []
+
                 return (
                   <div
                     key={
@@ -3019,6 +3090,190 @@ export default async function AdministradorPage({
                           matriculado.fecha_vencimiento
                         )}
                       />
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "22px",
+                        marginBottom: "22px",
+                        padding: "16px",
+                        border: "1px solid #dbe4ec",
+                        borderRadius: "12px",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "12px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#64748b",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                            }}
+                          >
+                            Documentos PDF emitidos
+                          </p>
+
+                          <p
+                            style={{
+                              margin: "5px 0 0",
+                              color: "#172033",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Historial de credenciales PDF generadas
+                          </p>
+                        </div>
+
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            borderRadius: "999px",
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            background: documentosPdf.length
+                              ? "#dbeafe"
+                              : "#e2e8f0",
+                            color: documentosPdf.length
+                              ? "#1e40af"
+                              : "#475569",
+                          }}
+                        >
+                          {documentosPdf.length}{" "}
+                          {documentosPdf.length === 1
+                            ? "DOCUMENTO"
+                            : "DOCUMENTOS"}
+                        </span>
+                      </div>
+
+                      {documentosPdf.length === 0 ? (
+                        <p
+                          style={{
+                            margin: "12px 0 0",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          Todavía no hay credenciales PDF registradas para este técnico.
+                        </p>
+                      ) : (
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "10px",
+                            marginTop: "14px",
+                          }}
+                        >
+                          {documentosPdf.map(
+                            documento => (
+                              <div
+                                key={documento.id}
+                                style={{
+                                  padding: "12px",
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: "10px",
+                                  background: "white",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    gap: "12px",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <div>
+                                    <div
+                                      style={{
+                                        fontWeight: "bold",
+                                        color: "#172033",
+                                      }}
+                                    >
+                                      {documento.codigo_documento}
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        marginTop: "5px",
+                                        color: "#64748b",
+                                        fontSize: "13px",
+                                      }}
+                                    >
+                                      Generado:{" "}
+                                      {new Date(
+                                        documento.generado_en
+                                      ).toLocaleString(
+                                        "es-AR",
+                                        {
+                                          timeZone:
+                                            "America/Argentina/Buenos_Aires",
+                                        }
+                                      )}
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        marginTop: "4px",
+                                        color: "#64748b",
+                                        fontSize: "13px",
+                                      }}
+                                    >
+                                      Matrícula:{" "}
+                                      <strong>
+                                        {documento.numero_matricula}
+                                      </strong>
+                                      {" · "}
+                                      Vencimiento:{" "}
+                                      <strong>
+                                        {formatearFecha(
+                                          documento.fecha_vencimiento
+                                        )}
+                                      </strong>
+                                    </div>
+                                  </div>
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      borderRadius: "999px",
+                                      padding: "5px 9px",
+                                      fontSize: "11px",
+                                      fontWeight: "bold",
+                                      background: documento.activo
+                                        ? "#dcfce7"
+                                        : "#fee2e2",
+                                      color: documento.activo
+                                        ? "#166534"
+                                        : "#991b1b",
+                                    }}
+                                  >
+                                    {documento.activo
+                                      ? "ACTIVO"
+                                      : "ANULADO"}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {!baja && (
