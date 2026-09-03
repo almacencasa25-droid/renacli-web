@@ -223,7 +223,7 @@ export async function GET(
     } = await supabase
       .from("matriculados")
       .select(
-        "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_vencimiento, estado",
+        "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado",
       )
       .eq("id", matriculadoId)
       .maybeSingle()
@@ -270,12 +270,17 @@ export async function GET(
     const generadoEn = fechaHoraArgentina(instanteGeneracion)
     const generadoEnIso = instanteGeneracion.toISOString()
 
+    // En la credencial, "Emisión" representa la acreditación vigente.
+    // La fecha de alta original sigue conservada en matriculados.fecha_emision.
+    const fechaEmisionCredencial =
+      matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
+
     const payloadFirma = [
       `id=${matriculado.id}`,
       `matricula=${matriculado.numero_matricula}`,
       `nombre=${matriculado.apellido_nombre}`,
       `estado=${matriculado.estado || "vigente"}`,
-      `emision=${matriculado.fecha_emision || ""}`,
+      `emision=${fechaEmisionCredencial || ""}`,
       `vencimiento=${matriculado.fecha_vencimiento || ""}`,
       `codigo_qr=${codigo}`,
       `generado=${generadoEnIso}`,
@@ -627,8 +632,27 @@ export async function GET(
       especialidadY -= 6.5
     }
 
-    page.drawText("VENCE", {
+    page.drawText("EMISIÓN", {
       x: datosX,
+      y: 25,
+      size: 4.8,
+      font: fontBold,
+      color: gris,
+    })
+
+    page.drawText(
+      formatearFecha(fechaEmisionCredencial),
+      {
+        x: datosX,
+        y: 16,
+        size: 6.3,
+        font: fontBold,
+        color: negro,
+      },
+    )
+
+    page.drawText("VENCE", {
+      x: datosX + 60,
       y: 25,
       size: 4.8,
       font: fontBold,
@@ -638,7 +662,7 @@ export async function GET(
     page.drawText(
       formatearFecha(matriculado.fecha_vencimiento),
       {
-        x: datosX,
+        x: datosX + 60,
         y: 16,
         size: 6.3,
         font: fontBold,
@@ -726,7 +750,7 @@ export async function GET(
           matriculado.apellido_nombre || "Sin nombre",
         p_estado: matriculado.estado || "vigente",
         p_fecha_emision:
-          matriculado.fecha_emision || null,
+          fechaEmisionCredencial || null,
         p_fecha_vencimiento:
           matriculado.fecha_vencimiento || null,
         p_codigo_qr: codigo,
