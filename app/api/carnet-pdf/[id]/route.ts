@@ -7,6 +7,11 @@ import {
   PDFFont,
   StandardFonts,
   rgb,
+  pushGraphicsState,
+  popGraphicsState,
+  rectangle,
+  clip,
+  endPath,
 } from "pdf-lib"
 import {
   createHash,
@@ -432,20 +437,49 @@ export async function GET(
           }
 
           if (imagen) {
-            const dims = imagen.scaleToFit(
-              fotoW - 4,
-              fotoH - 4,
+            /*
+              Reproduce el efecto "object-cover"
+              usado en la credencial web RENACLI:
+              llena todo el marco, mantiene la
+              proporción y recorta solo el sobrante.
+            */
+            const escala = Math.max(
+              fotoW / imagen.width,
+              fotoH / imagen.height,
             )
 
-            const x = fotoX + (fotoW - dims.width) / 2
-            const y = fotoY + (fotoH - dims.height) / 2
+            const anchoImagen =
+              imagen.width * escala
+            const altoImagen =
+              imagen.height * escala
+
+            const x =
+              fotoX + (fotoW - anchoImagen) / 2
+            const y =
+              fotoY + (fotoH - altoImagen) / 2
+
+            page.pushOperators(
+              pushGraphicsState(),
+              rectangle(
+                fotoX,
+                fotoY,
+                fotoW,
+                fotoH,
+              ),
+              clip(),
+              endPath(),
+            )
 
             page.drawImage(imagen, {
               x,
               y,
-              width: dims.width,
-              height: dims.height,
+              width: anchoImagen,
+              height: altoImagen,
             })
+
+            page.pushOperators(
+              popGraphicsState(),
+            )
 
             fotoInsertada = true
           }
