@@ -267,7 +267,9 @@ export async function GET(
       "https://renacli-web.vercel.app"
 
     const urlVerificacion = `${baseUrl}/verificar/${codigo}`
-    const generadoEn = fechaHoraArgentina()
+    const instanteGeneracion = new Date()
+    const generadoEn = fechaHoraArgentina(instanteGeneracion)
+    const generadoEnIso = instanteGeneracion.toISOString()
 
     const payloadFirma = [
       `id=${matriculado.id}`,
@@ -277,7 +279,7 @@ export async function GET(
       `emision=${matriculado.fecha_emision || ""}`,
       `vencimiento=${matriculado.fecha_vencimiento || ""}`,
       `codigo_qr=${codigo}`,
-      `generado=${generadoEn}`,
+      `generado=${generadoEnIso}`,
     ].join("|")
 
     const firmaCompleta = crearSello(payloadFirma)
@@ -700,6 +702,46 @@ export async function GET(
     )
 
     const pdfBytes = await pdf.save()
+
+    /*
+      Registramos cada PDF emitido antes de entregarlo.
+      Si el registro falla, el documento no se descarga.
+    */
+    const {
+      error: errorRegistroDocumento,
+    } = await supabase
+      .from("documentos_pdf_renacli")
+      .insert({
+        matriculado_id: matriculado.id,
+        codigo_documento: codigoDocumento,
+        numero_matricula: matriculado.numero_matricula,
+        apellido_nombre:
+          matriculado.apellido_nombre || "Sin nombre",
+        estado: matriculado.estado || "vigente",
+        fecha_emision:
+          matriculado.fecha_emision || null,
+        fecha_vencimiento:
+          matriculado.fecha_vencimiento || null,
+        codigo_qr: codigo,
+        firma_hmac: firmaCompleta,
+        generado_en: generadoEnIso,
+        activo: true,
+      })
+
+    if (errorRegistroDocumento) {
+      console.error(
+        "Error registrando PDF RENACLI:",
+        errorRegistroDocumento,
+      )
+
+      return NextResponse.json(
+        {
+          error:
+            "No se pudo registrar el documento PDF en RENACLI.",
+        },
+        { status: 500 },
+      )
+    }
 
     const nombreSeguro = matriculado.numero_matricula.replace(
       /[^A-Za-z0-9_-]/g,
