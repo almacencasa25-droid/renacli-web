@@ -266,7 +266,6 @@ export async function GET(
       process.env.NEXT_PUBLIC_SITE_URL ||
       "https://renacli-web.vercel.app"
 
-    const urlVerificacion = `${baseUrl}/verificar/${codigo}`
     const instanteGeneracion = new Date()
     const generadoEn = fechaHoraArgentina(instanteGeneracion)
     const generadoEnIso = instanteGeneracion.toISOString()
@@ -285,8 +284,16 @@ export async function GET(
     const firmaCompleta = crearSello(payloadFirma)
     const codigoDocumento = `RPDF-${firmaCompleta.slice(0, 16)}`
 
+    /*
+      El QR del PDF verifica ESTE documento específico.
+      Desde esa página también se puede consultar
+      la vigencia actual de la matrícula.
+    */
+    const urlVerificacionDocumento =
+      `${baseUrl}/verificar-documento/${encodeURIComponent(codigoDocumento)}`
+
     const qrBuffer = await QRCode.toBuffer(
-      urlVerificacion,
+      urlVerificacionDocumento,
       {
         width: 500,
         margin: 1,
