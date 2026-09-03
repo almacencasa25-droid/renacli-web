@@ -3150,9 +3150,16 @@ export default async function AdministradorPage({
                       />
 
                       <Dato
-                        titulo="Emisión"
+                        titulo="Alta original"
                         valor={formatearFecha(
                           matriculado.fecha_emision
+                        )}
+                      />
+
+                      <Dato
+                        titulo="Última acreditación"
+                        valor={formatearFecha(
+                          matriculado.fecha_ultima_acreditacion
                         )}
                       />
 
