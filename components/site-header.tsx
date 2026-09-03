@@ -103,7 +103,7 @@ export function SiteHeader() {
           </Link>
 
           <Link
-            href="/administrador"
+            href="/administrador/acceso"
             onClick={cerrarMenu}
             className="block px-5 py-4 text-sm font-semibold transition hover:bg-muted"
           >
