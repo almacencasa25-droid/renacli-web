@@ -133,7 +133,7 @@ async function cerrarSesion() {
 
   cookieStore.delete(COOKIE_NAME)
 
-  redirect("/administrador")
+  redirect("/")
 }
 
 async function crearMatriculado(formData: FormData) {
