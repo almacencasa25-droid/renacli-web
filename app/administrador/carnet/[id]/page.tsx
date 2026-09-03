@@ -58,7 +58,7 @@ export default async function CarnetPage({ params }: PageProps) {
   const { data: matriculado, error: errorMatriculado } = await supabase
     .from("matriculados")
     .select(
-      "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_vencimiento, estado",
+      "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado",
     )
     .eq("id", matriculadoId)
     .maybeSingle()
@@ -89,6 +89,9 @@ export default async function CarnetPage({ params }: PageProps) {
     margin: 1,
     errorCorrectionLevel: "M",
   })
+
+  const fechaEmisionCredencial =
+    matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950">
@@ -164,7 +167,7 @@ export default async function CarnetPage({ params }: PageProps) {
 
                 <Dato
                   titulo="Emisión"
-                  valor={formatearFecha(matriculado.fecha_emision)}
+                  valor={formatearFecha(fechaEmisionCredencial)}
                 />
 
                 <Dato
