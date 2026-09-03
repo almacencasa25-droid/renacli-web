@@ -136,6 +136,59 @@ async function cerrarSesion() {
   redirect("/")
 }
 
+async function anularDocumentoPdf(formData: FormData) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const documentoId = Number(
+    formData.get("documento_id") ?? 0
+  )
+
+  const terminoBusqueda = String(
+    formData.get("q") ?? ""
+  ).trim()
+
+  if (!Number.isInteger(documentoId) || documentoId <= 0) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        terminoBusqueda
+      )}&error=pdf_anular`
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { error } = await supabase
+    .from("documentos_pdf_renacli")
+    .update({
+      activo: false,
+    })
+    .eq("id", documentoId)
+    .eq("activo", true)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error anulando documento PDF:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        terminoBusqueda
+      )}&error=pdf_anular`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      terminoBusqueda
+    )}&mensaje=pdf_anulado`
+  )
+}
+
 async function crearMatriculado(formData: FormData) {
   "use server"
 
@@ -1897,6 +1950,22 @@ export default async function AdministradorPage({
         )}
 
         {parametros.mensaje ===
+          "pdf_anulado" && (
+          <Aviso
+            texto="Documento PDF anulado correctamente. Su código y QR seguirán siendo verificables, pero ahora aparecerá como ANULADO."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "pdf_anular" && (
+          <Aviso
+            texto="No fue posible anular el documento PDF."
+            tipo="error"
+          />
+        )}
+
+        {parametros.mensaje ===
           "editado" && (
           <Aviso
             texto="Datos actualizados correctamente."
@@ -3248,26 +3317,69 @@ export default async function AdministradorPage({
                                     </div>
                                   </div>
 
-                                  <span
+                                  <div
                                     style={{
-                                      display: "inline-flex",
+                                      display: "flex",
                                       alignItems: "center",
-                                      borderRadius: "999px",
-                                      padding: "5px 9px",
-                                      fontSize: "11px",
-                                      fontWeight: "bold",
-                                      background: documento.activo
-                                        ? "#dcfce7"
-                                        : "#fee2e2",
-                                      color: documento.activo
-                                        ? "#166534"
-                                        : "#991b1b",
+                                      gap: "8px",
+                                      flexWrap: "wrap",
                                     }}
                                   >
-                                    {documento.activo
-                                      ? "ACTIVO"
-                                      : "ANULADO"}
-                                  </span>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        borderRadius: "999px",
+                                        padding: "5px 9px",
+                                        fontSize: "11px",
+                                        fontWeight: "bold",
+                                        background: documento.activo
+                                          ? "#dcfce7"
+                                          : "#fee2e2",
+                                        color: documento.activo
+                                          ? "#166534"
+                                          : "#991b1b",
+                                      }}
+                                    >
+                                      {documento.activo
+                                        ? "ACTIVO"
+                                        : "ANULADO"}
+                                    </span>
+
+                                    {documento.activo && (
+                                      <form
+                                        action={anularDocumentoPdf}
+                                      >
+                                        <input
+                                          type="hidden"
+                                          name="documento_id"
+                                          value={documento.id}
+                                        />
+
+                                        <input
+                                          type="hidden"
+                                          name="q"
+                                          value={terminoBusqueda}
+                                        />
+
+                                        <button
+                                          type="submit"
+                                          style={{
+                                            border: "1px solid #fecaca",
+                                            borderRadius: "8px",
+                                            padding: "6px 10px",
+                                            background: "#fff1f2",
+                                            color: "#be123c",
+                                            fontSize: "11px",
+                                            fontWeight: "bold",
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Anular PDF
+                                        </button>
+                                      </form>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             )
