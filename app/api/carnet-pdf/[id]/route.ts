@@ -381,8 +381,8 @@ export async function GET(
     // Zonas fijas: FOTO izquierda, DATOS centro, QR derecha.
     const fotoX = 8
     const fotoY = 47
-    const fotoW = 43
-    const fotoH = 57
+    const fotoW = 36
+    const fotoH = 44
 
     const datosX = 58
     const datosW = 111
@@ -457,8 +457,8 @@ export async function GET(
 
     if (!fotoInsertada) {
       page.drawText("FOTO", {
-        x: fotoX + 14,
-        y: fotoY + 28,
+        x: fotoX + 10.5,
+        y: fotoY + 20,
         size: 6,
         font: fontBold,
         color: gris,
