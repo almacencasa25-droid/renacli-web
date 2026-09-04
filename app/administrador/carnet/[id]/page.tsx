@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import QRCode from "qrcode"
 import { BotonPdfCarnet } from "@/components/boton-pdf-carnet"
+import { crearUrlFirmadaFoto } from "@/lib/fotos"
 
 const COOKIE_ADMIN = "renacli_admin_session"
 
@@ -92,6 +93,10 @@ export default async function CarnetPage({ params }: PageProps) {
 
   const fechaEmisionCredencial =
     matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
+
+  const fotoUrlFirmada = matriculado.foto_url
+    ? await crearUrlFirmadaFoto(matriculado.foto_url, 300)
+    : null
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950">
@@ -185,9 +190,9 @@ export default async function CarnetPage({ params }: PageProps) {
             </div>
 
             <aside className="flex flex-col items-center justify-start">
-              {matriculado.foto_url ? (
+              {fotoUrlFirmada ? (
                 <img
-                  src={matriculado.foto_url}
+                  src={fotoUrlFirmada}
                   alt={`Foto de ${matriculado.apellido_nombre}`}
                   className="mb-5 h-44 w-36 rounded-xl border border-slate-200 object-cover"
                 />
