@@ -39,6 +39,53 @@ function formatearFecha(fecha: string | null) {
   return `${dia}/${mes}/${anio}`
 }
 
+function obtenerEstadoEfectivo(
+  estadoOriginal: string | null,
+  fechaVencimiento: string | null,
+) {
+  const estadoNormalizado = (estadoOriginal || "vigente")
+    .trim()
+    .toLowerCase()
+
+  if (estadoNormalizado !== "vigente" || !fechaVencimiento) {
+    return estadoNormalizado
+  }
+
+  const partes = fechaVencimiento.substring(0, 10).split("-")
+
+  if (partes.length !== 3) {
+    return estadoNormalizado
+  }
+
+  const anio = Number(partes[0])
+  const mes = Number(partes[1])
+  const dia = Number(partes[2])
+
+  if (
+    !Number.isFinite(anio) ||
+    !Number.isFinite(mes) ||
+    !Number.isFinite(dia)
+  ) {
+    return estadoNormalizado
+  }
+
+  const ahora = new Date()
+
+  const hoyUTC = Date.UTC(
+    ahora.getFullYear(),
+    ahora.getMonth(),
+    ahora.getDate(),
+  )
+
+  const vencimientoUTC = Date.UTC(anio, mes - 1, dia)
+
+  if (vencimientoUTC < hoyUTC) {
+    return "vencida"
+  }
+
+  return estadoNormalizado
+}
+
 export default async function CarnetPage({ params }: PageProps) {
   const cookieStore = await cookies()
   const sesion = cookieStore.get(COOKIE_ADMIN)?.value
@@ -93,6 +140,11 @@ export default async function CarnetPage({ params }: PageProps) {
 
   const fechaEmisionCredencial =
     matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
+
+  const estadoEfectivo = obtenerEstadoEfectivo(
+    matriculado.estado,
+    matriculado.fecha_vencimiento,
+  )
 
   const fotoUrlFirmada = matriculado.foto_url
     ? await crearUrlFirmadaFoto(matriculado.foto_url, 300)
@@ -153,7 +205,7 @@ export default async function CarnetPage({ params }: PageProps) {
 
                 <Dato
                   titulo="Estado"
-                  valor={(matriculado.estado || "vigente").toUpperCase()}
+                  valor={estadoEfectivo.toUpperCase()}
                 />
 
                 <Dato
