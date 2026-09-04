@@ -16,9 +16,9 @@ import { Verificador } from "@/components/verificador"
 const INFORMACION = [
   {
     icono: ShieldCheck,
-    titulo: "Consulta oficial",
+    titulo: "Consulta de matrícula RENACLI",
     texto:
-      "Verifique si un técnico se encuentra matriculado y habilitado por el registro.",
+      "Verifique si un técnico posee una matrícula RENACLI registrada y vigente.",
   },
   {
     icono: Thermometer,
