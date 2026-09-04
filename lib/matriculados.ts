@@ -21,6 +21,7 @@
  * ------------------------------------------------------------------
  */
 
+import { crearUrlFirmadaFoto } from "@/lib/fotos"
 import { getSupabase, supabaseConfigurado } from "@/lib/supabase"
 
 export type EstadoMatricula =
@@ -351,9 +352,9 @@ function separarApellidoNombre(nombreCompleto: string) {
  * Convierte una fila de matriculados_publicos
  * al formato utilizado por la web.
  */
-function mapearFila(
+async function mapearFila(
   fila: Record<string, unknown>,
-): MatriculadoPublico {
+): Promise<MatriculadoPublico> {
   const fecha_emision = normalizarFecha(
     primerValor(fila, [
       "fecha_emision",
@@ -447,13 +448,18 @@ function mapearFila(
     ]),
 
     foto_url:
-      primerValor(fila, [
-        "foto_url",
-        "foto",
-        "url_foto",
-        "imagen",
-        "avatar_url",
-      ]) || null,
+      fila["autoriza_publicacion"] === true
+        ? await crearUrlFirmadaFoto(
+            primerValor(fila, [
+              "foto_url",
+              "foto",
+              "url_foto",
+              "imagen",
+              "avatar_url",
+            ]) || null,
+            300,
+          )
+        : null,
 
     autoriza_publicacion:
       fila["autoriza_publicacion"] === true,
@@ -523,9 +529,11 @@ export async function buscarMatriculados(
     )
   }
 
-  return (data ?? []).map((fila) =>
-    mapearFila(
-      fila as Record<string, unknown>,
+  return Promise.all(
+    (data ?? []).map((fila) =>
+      mapearFila(
+        fila as Record<string, unknown>,
+      ),
     ),
   )
 }
@@ -589,7 +597,7 @@ export async function obtenerMatriculado(
   const fila = (data ?? [])[0]
 
   return fila
-    ? mapearFila(
+    ? await mapearFila(
         fila as Record<string, unknown>,
       )
     : null
