@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 import QRCode from "qrcode"
+import { descargarFotoPrivada } from "@/lib/fotos"
 import {
   PDFDocument,
   PDFFont,
@@ -425,27 +426,25 @@ export async function GET(
 
     if (matriculado.foto_url) {
       try {
-        const respuestaFoto = await fetch(
+        const fotoPrivada = await descargarFotoPrivada(
           matriculado.foto_url,
-          { cache: "no-store" },
         )
 
-        if (respuestaFoto.ok) {
-          const bytes = new Uint8Array(
-            await respuestaFoto.arrayBuffer(),
-          )
+        if (fotoPrivada) {
+          const bytes = new Uint8Array(fotoPrivada)
 
-          const tipo = (
-            respuestaFoto.headers.get("content-type") || ""
-          ).toLowerCase()
+          const referenciaFoto =
+            matriculado.foto_url.toLowerCase()
 
           let imagen = null
 
-          if (tipo.includes("png")) {
+          if (
+            referenciaFoto.includes(".png")
+          ) {
             imagen = await pdf.embedPng(bytes)
           } else if (
-            tipo.includes("jpeg") ||
-            tipo.includes("jpg")
+            referenciaFoto.includes(".jpg") ||
+            referenciaFoto.includes(".jpeg")
           ) {
             imagen = await pdf.embedJpg(bytes)
           }
