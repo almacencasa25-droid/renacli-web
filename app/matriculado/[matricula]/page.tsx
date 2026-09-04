@@ -13,7 +13,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const matriculado = await obtenerMatriculado(matricula)
 
   if (!matriculado) {
-    return { title: "Matrícula no encontrada | RENACLI" }
+    return {
+      title: "Matrícula no encontrada | RENACLI",
+      description: "Consulta pública de matrícula RENACLI.",
+    }
+  }
+
+  const autorizaPublicacion =
+    matriculado.autoriza_publicacion === true
+
+  if (!autorizaPublicacion) {
+    return {
+      title: `${matriculado.matricula} | RENACLI`,
+      description:
+        "Consulta pública del estado y vigencia de una matrícula RENACLI. Los datos personales no se publican sin autorización expresa del titular.",
+    }
   }
 
   return {
@@ -42,6 +56,7 @@ export default async function FichaPage({ params }: Props) {
         <h1 className="mt-5 text-2xl font-bold leading-tight text-foreground text-balance sm:text-3xl">
           Ficha del matriculado
         </h1>
+
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
           Constancia pública de inscripción en el Registro Nacional de Climatización y Refrigeración.
         </p>
@@ -51,8 +66,16 @@ export default async function FichaPage({ params }: Props) {
             <FichaMatriculado matriculado={matriculado} />
           ) : (
             <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm sm:p-10">
-              <SearchX className="mx-auto size-9 text-muted-foreground" aria-hidden="true" strokeWidth={1.5} />
-              <h2 className="mt-4 text-lg font-bold text-foreground">Matrícula no encontrada</h2>
+              <SearchX
+                className="mx-auto size-9 text-muted-foreground"
+                aria-hidden="true"
+                strokeWidth={1.5}
+              />
+
+              <h2 className="mt-4 text-lg font-bold text-foreground">
+                Matrícula no encontrada
+              </h2>
+
               <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground text-pretty">
                 No existe ninguna matrícula registrada con el número{" "}
                 <span className="font-mono font-semibold text-foreground">
@@ -60,6 +83,7 @@ export default async function FichaPage({ params }: Props) {
                 </span>
                 . Verifique el número del carnet o realice una nueva consulta.
               </p>
+
               <Link
                 href="/"
                 className="mt-5 inline-flex h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
