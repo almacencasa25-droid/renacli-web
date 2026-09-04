@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
+import { crearUrlFirmadaFoto } from "@/lib/fotos"
 
 type PageProps = {
   params: Promise<{ codigo: string }>
@@ -240,6 +241,15 @@ export default async function VerificarCodigoPage({
       .autoriza_publicacion ===
     true
 
+  const fotoUrlFirmada =
+    autorizaPublicacion &&
+    credencial.foto_url
+      ? await crearUrlFirmadaFoto(
+          credencial.foto_url,
+          300
+        )
+      : null
+
   const estado =
     calcularEstado(
       credencial
@@ -356,11 +366,10 @@ export default async function VerificarCodigoPage({
                   </p>
 
                   {
-                    credencial.foto_url ? (
+                    fotoUrlFirmada ? (
                       <img
                         src={
-                          credencial
-                            .foto_url
+                          fotoUrlFirmada
                         }
                         alt={`Foto de ${
                           credencial
