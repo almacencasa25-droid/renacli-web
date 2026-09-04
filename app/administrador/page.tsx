@@ -23,6 +23,7 @@ type MatriculadoAdmin = {
   estado: string | null
   especialidad: string | null
   foto_url: string | null
+  foto_url_visualizacion?: string | null
   codigo_qr: string | null
   observaciones: string | null
   acepta_reglamento: boolean
@@ -73,6 +74,87 @@ function obtenerSupabaseAdmin() {
       autoRefreshToken: false,
     },
   })
+}
+
+
+function obtenerRutaFotoStorage(
+  fotoUrl: string | null
+) {
+  if (!fotoUrl) return null
+
+  const marcador =
+    "/fotos-matriculados/"
+
+  const posicion =
+    fotoUrl.indexOf(marcador)
+
+  if (posicion === -1) {
+    return null
+  }
+
+  const ruta = fotoUrl
+    .slice(posicion + marcador.length)
+    .split("?")[0]
+
+  if (!ruta) return null
+
+  try {
+    return decodeURIComponent(ruta)
+  } catch {
+    return ruta
+  }
+}
+
+async function obtenerUrlFotoAdministrador(
+  fotoUrl: string | null
+) {
+  const ruta =
+    obtenerRutaFotoStorage(fotoUrl)
+
+  if (!ruta) return null
+
+  const supabase =
+    obtenerSupabaseAdmin()
+
+  const { data, error } =
+    await supabase.storage
+      .from("fotos-matriculados")
+      .createSignedUrl(
+        ruta,
+        60 * 60
+      )
+
+  if (error || !data?.signedUrl) {
+    console.error(
+      "[RENACLI] Error generando URL firmada de foto para administrador:",
+      error
+    )
+    return null
+  }
+
+  return data.signedUrl
+}
+
+async function prepararFotoAdministrador(
+  matriculado: MatriculadoAdmin
+): Promise<MatriculadoAdmin> {
+  if (!matriculado.foto_url) {
+    return {
+      ...matriculado,
+      foto_url_visualizacion: null,
+    }
+  }
+
+  const urlFirmada =
+    await obtenerUrlFotoAdministrador(
+      matriculado.foto_url
+    )
+
+  return {
+    ...matriculado,
+    foto_url_visualizacion:
+      urlFirmada,
+  }
 }
 
 async function estaAutorizado() {
@@ -1632,10 +1714,17 @@ export default async function AdministradorPage({
     MatriculadoAdmin | null = null
 
   if (editarId) {
-    matriculadoEditar =
+    const matriculadoEncontrado =
       await obtenerMatriculadoPorId(
         editarId
       )
+
+    matriculadoEditar =
+      matriculadoEncontrado
+        ? await prepararFotoAdministrador(
+            matriculadoEncontrado
+          )
+        : null
   }
 
   const renovarId =
@@ -1658,9 +1747,16 @@ export default async function AdministradorPage({
     mostrarBusqueda &&
     terminoBusqueda
   ) {
-    resultados =
+    const resultadosEncontrados =
       await buscarMatriculados(
         terminoBusqueda
+      )
+
+    resultados =
+      await Promise.all(
+        resultadosEncontrados.map(
+          prepararFotoAdministrador
+        )
       )
   }
 
@@ -2423,7 +2519,7 @@ export default async function AdministradorPage({
                 marginTop: "24px",
               }}
             >
-              {matriculadoEditar.foto_url && (
+              {matriculadoEditar.foto_url_visualizacion && (
                 <div
                   style={{
                     marginBottom: "18px",
@@ -2439,7 +2535,7 @@ export default async function AdministradorPage({
                   </p>
 
                   <img
-                    src={matriculadoEditar.foto_url}
+                    src={matriculadoEditar.foto_url_visualizacion}
                     alt={`Foto de ${
                       matriculadoEditar.apellido_nombre ||
                       "matriculado"
@@ -2851,9 +2947,9 @@ export default async function AdministradorPage({
                         background: "#f8fafc",
                       }}
                     >
-                      {matriculado.foto_url ? (
+                      {matriculado.foto_url_visualizacion ? (
                         <img
-                          src={matriculado.foto_url}
+                          src={matriculado.foto_url_visualizacion}
                           alt={`Foto de ${
                             matriculado.apellido_nombre ||
                             "matriculado"
