@@ -187,21 +187,29 @@ export default function FotoMatriculado({
     resetearAjustes()
 
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
+      if (!window.isSecureContext) {
         setErrorCamara(
-          "Este navegador no permite acceder a la cámara. Podés usar Elegir foto."
+          "DIAGNÓSTICO: CONEXIÓN_NO_SEGURA. El navegador no permite usar la cámara porque esta página no se está ejecutando en un contexto seguro HTTPS."
         )
         return
       }
 
-      const nuevoStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      })
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setErrorCamara(
+          "DIAGNÓSTICO: CÁMARA_NO_DISPONIBLE. Este navegador no ofrece acceso a la cámara mediante getUserMedia."
+        )
+        return
+      }
+
+      const nuevoStream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        })
 
       setStream(nuevoStream)
       setCamaraActiva(true)
@@ -213,9 +221,53 @@ export default function FotoMatriculado({
         }
       })
     } catch (error) {
-      console.error("[RENACLI] No se pudo abrir la cámara:", error)
+      console.error(
+        "[RENACLI] Error real al abrir cámara:",
+        error
+      )
+
+      const nombre =
+        error instanceof DOMException
+          ? error.name
+          : "ErrorDesconocido"
+
+      let explicacion =
+        "El navegador devolvió un error no identificado al intentar abrir la cámara."
+
+      if (
+        nombre === "NotAllowedError" ||
+        nombre === "PermissionDeniedError"
+      ) {
+        explicacion =
+          "El permiso de cámara fue rechazado o está bloqueado para este sitio."
+      } else if (
+        nombre === "NotFoundError" ||
+        nombre === "DevicesNotFoundError"
+      ) {
+        explicacion =
+          "El navegador no encontró una cámara disponible en este dispositivo."
+      } else if (
+        nombre === "NotReadableError" ||
+        nombre === "TrackStartError"
+      ) {
+        explicacion =
+          "La cámara existe, pero no se puede usar. Puede estar ocupada por otra aplicación o bloqueada por el sistema."
+      } else if (
+        nombre === "OverconstrainedError" ||
+        nombre === "ConstraintNotSatisfiedError"
+      ) {
+        explicacion =
+          "La cámara no pudo cumplir con la configuración solicitada."
+      } else if (nombre === "SecurityError") {
+        explicacion =
+          "El navegador bloqueó el acceso a la cámara por una restricción de seguridad."
+      } else if (nombre === "AbortError") {
+        explicacion =
+          "El navegador interrumpió el intento de abrir la cámara."
+      }
+
       setErrorCamara(
-        "No se pudo abrir la cámara. Revisá que el navegador tenga permiso para usarla."
+        `DIAGNÓSTICO: ${nombre}. ${explicacion}`
       )
     }
   }
