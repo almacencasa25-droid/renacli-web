@@ -85,6 +85,57 @@ function formatearFecha(fecha: string | null) {
   return `${partes[2]}/${partes[1]}/${partes[0]}`
 }
 
+function obtenerEstadoEfectivo(
+  estadoOriginal: string | null,
+  fechaVencimiento: string | null,
+) {
+  const estadoNormalizado = (estadoOriginal || "vigente")
+    .trim()
+    .toLowerCase()
+
+  if (estadoNormalizado !== "vigente" || !fechaVencimiento) {
+    return estadoNormalizado
+  }
+
+  const partes = fechaVencimiento.substring(0, 10).split("-")
+
+  if (partes.length !== 3) {
+    return estadoNormalizado
+  }
+
+  const anio = Number(partes[0])
+  const mes = Number(partes[1])
+  const dia = Number(partes[2])
+
+  if (
+    !Number.isFinite(anio) ||
+    !Number.isFinite(mes) ||
+    !Number.isFinite(dia)
+  ) {
+    return estadoNormalizado
+  }
+
+  const ahora = new Date()
+
+  const hoyUTC = Date.UTC(
+    ahora.getFullYear(),
+    ahora.getMonth(),
+    ahora.getDate(),
+  )
+
+  const vencimientoUTC = Date.UTC(
+    anio,
+    mes - 1,
+    dia,
+  )
+
+  if (vencimientoUTC < hoyUTC) {
+    return "vencida"
+  }
+
+  return estadoNormalizado
+}
+
 function fechaHoraArgentina() {
   return new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -276,11 +327,16 @@ export async function GET(
     const fechaEmisionCredencial =
       matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
 
+    const estadoEfectivo = obtenerEstadoEfectivo(
+      matriculado.estado,
+      matriculado.fecha_vencimiento,
+    )
+
     const payloadFirma = [
       `id=${matriculado.id}`,
       `matricula=${matriculado.numero_matricula}`,
       `nombre=${matriculado.apellido_nombre}`,
-      `estado=${matriculado.estado || "vigente"}`,
+      `estado=${estadoEfectivo}`,
       `emision=${fechaEmisionCredencial || ""}`,
       `vencimiento=${matriculado.fecha_vencimiento || ""}`,
       `codigo_qr=${codigo}`,
@@ -559,9 +615,7 @@ export async function GET(
       color: azul,
     })
 
-    const estadoTexto = (
-      matriculado.estado || "vigente"
-    ).toUpperCase()
+    const estadoTexto = estadoEfectivo.toUpperCase()
 
     const estadoColor =
       estadoTexto === "VIGENTE"
@@ -747,7 +801,7 @@ export async function GET(
         p_numero_matricula: matriculado.numero_matricula,
         p_apellido_nombre:
           matriculado.apellido_nombre || "Sin nombre",
-        p_estado: matriculado.estado || "vigente",
+        p_estado: estadoEfectivo,
         p_fecha_emision:
           fechaEmisionCredencial || null,
         p_fecha_vencimiento:
