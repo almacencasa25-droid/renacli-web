@@ -12,6 +12,7 @@ import {
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { Verificador } from "@/components/verificador"
+import { FormularioContacto } from "@/components/formulario-contacto"
 
 const INFORMACION = [
   {
@@ -202,6 +203,8 @@ export default function Home() {
             </p>
           </div>
         </section>
+
+        <FormularioContacto />
 
         <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
           <div className="mb-6">
