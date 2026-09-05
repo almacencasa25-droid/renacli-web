@@ -1,7 +1,13 @@
 "use client"
 
-import { useActionState } from "react"
-import { AlertCircle, IdCard, Loader2, Search, SearchX } from "lucide-react"
+import { useActionState, useEffect, useRef } from "react"
+import {
+  AlertCircle,
+  IdCard,
+  Loader2,
+  Search,
+  SearchX,
+} from "lucide-react"
 import { verificarMatricula } from "@/app/actions"
 import { consultaInicial } from "@/lib/consulta"
 import { FichaMatriculado } from "@/components/ficha-matriculado"
@@ -14,6 +20,19 @@ export function Verificador() {
     verificarMatricula,
     consultaInicial,
   )
+
+  const resultadosRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!estado.consultado) return
+
+    window.setTimeout(() => {
+      resultadosRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    }, 100)
+  }, [estado.consultado, estado.resultados.length, estado.error])
 
   return (
     <div className="flex flex-col gap-8">
@@ -79,8 +98,9 @@ export function Verificador() {
       </div>
 
       <div
+        ref={resultadosRef}
         aria-live="polite"
-        className="flex flex-col gap-5"
+        className="scroll-mt-24 flex flex-col gap-5"
       >
         {estado.error ? (
           <div className="flex items-start gap-3 rounded-lg border border-destructive/35 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -88,6 +108,7 @@ export function Verificador() {
               className="mt-0.5 size-5 shrink-0"
               aria-hidden="true"
             />
+
             <p className="text-pretty">
               {estado.error}
             </p>
@@ -102,13 +123,14 @@ export function Verificador() {
               aria-hidden="true"
               strokeWidth={1.5}
             />
+
             <h2 className="mt-3 text-base font-bold text-foreground">
               Sin resultados
             </h2>
+
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground text-pretty">
-              No se encontraron matriculados que
-              coincidan con «{estado.termino}».
-              Verifique el número ingresado o consulte
+              No se encontraron matriculados que coincidan con
+              «{estado.termino}». Verifique el número ingresado o consulte
               con el registro.
             </p>
           </div>
