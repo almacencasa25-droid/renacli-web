@@ -3902,6 +3902,13 @@ export default async function AdministradorPage({
                     >
                       Buscar matriculado
                     </a>
+
+                    <a
+                      href="/administrador/comunicaciones"
+                      style={botonBlanco}
+                    >
+                      Comunicaciones y calificaciones
+                    </a>
                   </div>
                 </div>
 
