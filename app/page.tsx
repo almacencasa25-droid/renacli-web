@@ -8,6 +8,9 @@ import {
   UserX,
   RefreshCw,
   Smartphone,
+  Search,
+  Mail,
+  Info,
 } from "lucide-react"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -103,6 +106,7 @@ export default function Home() {
       <SiteHeader />
 
       <main className="flex-1">
+        {/* ENCABEZADO */}
         <section className="border-b border-border bg-secondary/40">
           <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -119,46 +123,124 @@ export default function Home() {
           </div>
         </section>
 
-        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-          <Verificador />
+        {/* ACCESOS RÁPIDOS */}
+        <section className="border-b border-border bg-background">
+          <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
+            <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Accesos rápidos
+            </p>
 
-          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-5 sm:p-6">
-            <div className="flex flex-col items-center text-center">
-              <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Smartphone
-                  className="size-6"
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <a
+                href="#verificar"
+                className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <Search
+                  className="size-5 text-primary"
                   aria-hidden="true"
                   strokeWidth={1.75}
                 />
-              </span>
-
-              <h2 className="mt-3 text-lg font-bold text-foreground">
-                Credencial Digital RENACLI
-              </h2>
-
-              <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-                Si sos técnico matriculado, instalá la Credencial Digital
-                RENACLI en tu teléfono para acceder a tu identificación.
-              </p>
-
-              <a
-                href="https://renacli-credencial.vercel.app/instalar"
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
-              >
-                <Smartphone
-                  className="size-5"
-                  aria-hidden="true"
-                />
-                Instalar Credencial Digital
+                <span className="text-sm font-semibold text-foreground">
+                  Verificar matrícula
+                </span>
               </a>
 
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                Disponible para teléfonos Android y iPhone.
-              </p>
+              <a
+                href="#credencial"
+                className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <Smartphone
+                  className="size-5 text-primary"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                <span className="text-sm font-semibold text-foreground">
+                  Credencial digital
+                </span>
+              </a>
+
+              <a
+                href="#contacto"
+                className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <Mail
+                  className="size-5 text-primary"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                <span className="text-sm font-semibold text-foreground">
+                  Contactar
+                </span>
+              </a>
+
+              <a
+                href="#informacion"
+                className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <Info
+                  className="size-5 text-primary"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                <span className="text-sm font-semibold text-foreground">
+                  Información
+                </span>
+              </a>
             </div>
           </div>
-        </div>
+        </section>
 
+        {/* VERIFICADOR */}
+        <section
+          id="verificar"
+          className="scroll-mt-24"
+        >
+          <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+            <Verificador />
+
+            {/* CREDENCIAL DIGITAL */}
+            <div
+              id="credencial"
+              className="mt-6 scroll-mt-24 rounded-xl border border-primary/20 bg-primary/5 p-5 sm:p-6"
+            >
+              <div className="flex flex-col items-center text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Smartphone
+                    className="size-6"
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                  />
+                </span>
+
+                <h2 className="mt-3 text-lg font-bold text-foreground">
+                  Credencial Digital RENACLI
+                </h2>
+
+                <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+                  Si sos técnico matriculado, instalá la Credencial Digital
+                  RENACLI en tu teléfono para acceder a tu identificación.
+                </p>
+
+                <a
+                  href="https://renacli-credencial.vercel.app/instalar"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
+                >
+                  <Smartphone
+                    className="size-5"
+                    aria-hidden="true"
+                  />
+                  Instalar Credencial Digital
+                </a>
+
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  Disponible para teléfonos Android y iPhone.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* INFORMACIÓN GENERAL */}
         <section className="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {INFORMACION.map((item) => {
@@ -204,9 +286,14 @@ export default function Home() {
           </div>
         </section>
 
+        {/* FORMULARIO DE CONTACTO */}
         <FormularioContacto />
 
-        <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+        {/* INFORMACIÓN DE MATRÍCULA */}
+        <section
+          id="informacion"
+          className="mx-auto max-w-5xl scroll-mt-24 px-4 py-10 sm:px-6 sm:py-14"
+        >
           <div className="mb-6">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Información para técnicos y público
