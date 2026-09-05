@@ -25,6 +25,7 @@ export function CalificacionTecnico({
   const [hover, setHover] = useState(0)
   const [estado, setEstado] = useState<EstadoEnvio>("idle")
   const [mensaje, setMensaje] = useState("")
+
   const [reputacion, setReputacion] = useState<Reputacion>(
     reputacionInicial ?? {
       totalCalificaciones: 0,
@@ -47,7 +48,9 @@ export function CalificacionTecnico({
     return Math.max(0, Math.min(5, reputacion.promedioEstrellas))
   }, [reputacion])
 
-  async function enviarCalificacion(event: React.FormEvent<HTMLFormElement>) {
+  async function enviarCalificacion(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault()
 
     if (puntuacion < 1 || puntuacion > 5) {
@@ -75,7 +78,8 @@ export function CalificacionTecnico({
 
       if (!respuesta.ok) {
         throw new Error(
-          resultado?.error || "No se pudo registrar la calificación."
+          resultado?.error ||
+            "No se pudo registrar la calificación."
         )
       }
 
@@ -90,6 +94,7 @@ export function CalificacionTecnico({
       setMensaje("Tu calificación fue registrada correctamente.")
     } catch (error) {
       setEstado("error")
+
       setMensaje(
         error instanceof Error
           ? error.message
@@ -99,7 +104,10 @@ export function CalificacionTecnico({
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+    <section
+      id="calificacion"
+      className="mt-6 scroll-mt-24 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
+    >
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Valoración del técnico
@@ -110,12 +118,15 @@ export function CalificacionTecnico({
         </h2>
 
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Si recibiste un trabajo de este técnico, podés dejar una valoración
-          de 1 a 5 estrellas.
+          Si recibiste un trabajo de este técnico, podés dejar una
+          valoración de 1 a 5 estrellas.
         </p>
       </div>
 
-      <form onSubmit={enviarCalificacion} className="mt-5 space-y-4">
+      <form
+        onSubmit={enviarCalificacion}
+        className="mt-5 space-y-4"
+      >
         <div>
           <span className="mb-2 block text-sm font-semibold text-foreground">
             Tu calificación
@@ -133,7 +144,9 @@ export function CalificacionTecnico({
                   onMouseEnter={() => setHover(valor)}
                   onMouseLeave={() => setHover(0)}
                   className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`${valor} estrella${valor === 1 ? "" : "s"}`}
+                  aria-label={`${valor} estrella${
+                    valor === 1 ? "" : "s"
+                  }`}
                 >
                   <Star
                     className={`size-8 transition ${
@@ -206,7 +219,9 @@ export function CalificacionTecnico({
           disabled={estado === "enviando"}
           className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {estado === "enviando" ? "Enviando..." : "Enviar calificación"}
+          {estado === "enviando"
+            ? "Enviando..."
+            : "Enviar calificación"}
         </button>
 
         {mensaje && (
@@ -239,7 +254,8 @@ export function CalificacionTecnico({
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((valor) => {
-                  const activa = valor <= Math.round(estrellasPromedio)
+                  const activa =
+                    valor <= Math.round(estrellasPromedio)
 
                   return (
                     <Star
@@ -283,12 +299,13 @@ export function CalificacionTecnico({
             </div>
 
             <p className="mt-2 text-sm text-muted-foreground">
-              La reputación pública se mostrará cuando este técnico alcance al
-              menos 6 calificaciones válidas.
+              La reputación pública se mostrará cuando este técnico
+              alcance al menos 6 calificaciones válidas.
             </p>
 
             <p className="mt-1 text-xs text-muted-foreground">
-              Calificaciones actuales: {reputacion.totalCalificaciones}
+              Calificaciones actuales:{" "}
+              {reputacion.totalCalificaciones}
             </p>
           </div>
         )}
