@@ -11,7 +11,6 @@ type Reputacion = {
 }
 
 type Props = {
-  matriculadoId: number
   matricula: string
   reputacionInicial?: Reputacion
 }
@@ -19,7 +18,6 @@ type Props = {
 type EstadoEnvio = "idle" | "enviando" | "ok" | "error"
 
 export function CalificacionTecnico({
-  matriculadoId,
   matricula,
   reputacionInicial,
 }: Props) {
@@ -61,7 +59,6 @@ export function CalificacionTecnico({
     const formulario = event.currentTarget
     const datos = new FormData(formulario)
 
-    datos.set("matriculadoId", String(matriculadoId))
     datos.set("matricula", matricula)
     datos.set("puntuacion", String(puntuacion))
 
