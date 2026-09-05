@@ -1,12 +1,68 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { createClient } from "@supabase/supabase-js"
 import { ArrowLeft, SearchX } from "lucide-react"
 import { FichaMatriculado } from "@/components/ficha-matriculado"
+import { CalificacionTecnico } from "@/components/calificacion-tecnico"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { normalizarMatricula, obtenerMatriculado } from "@/lib/matriculados"
 
 type Props = { params: Promise<{ matricula: string }> }
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
+
+async function obtenerReputacion(matriculadoId: number) {
+  if (!supabaseUrl || !supabaseSecretKey) {
+    return {
+      totalCalificaciones: 0,
+      promedioEstrellas: null,
+      porcentajeValoracion: null,
+      mostrarPublicamente: false,
+    }
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseSecretKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  })
+
+  const { data, error } = await supabase
+    .from("reputacion_matriculados")
+    .select(
+      "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
+    )
+    .eq("matriculado_id", matriculadoId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("Error obteniendo reputación RENACLI:", error)
+
+    return {
+      totalCalificaciones: 0,
+      promedioEstrellas: null,
+      porcentajeValoracion: null,
+      mostrarPublicamente: false,
+    }
+  }
+
+  return {
+    totalCalificaciones: Number(data?.total_calificaciones ?? 0),
+    promedioEstrellas:
+      data?.promedio_estrellas == null
+        ? null
+        : Number(data.promedio_estrellas),
+    porcentajeValoracion:
+      data?.porcentaje_valoracion == null
+        ? null
+        : Number(data.porcentaje_valoracion),
+    mostrarPublicamente:
+      data?.mostrar_publicamente === true,
+  }
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { matricula } = await params
@@ -40,6 +96,10 @@ export default async function FichaPage({ params }: Props) {
   const { matricula } = await params
   const matriculado = await obtenerMatriculado(matricula)
 
+  const reputacion = matriculado
+    ? await obtenerReputacion(Number(matriculado.id))
+    : null
+
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <SiteHeader />
@@ -63,7 +123,22 @@ export default async function FichaPage({ params }: Props) {
 
         <div className="mt-6">
           {matriculado ? (
-            <FichaMatriculado matriculado={matriculado} />
+            <>
+              <FichaMatriculado matriculado={matriculado} />
+
+              <CalificacionTecnico
+                matriculadoId={Number(matriculado.id)}
+                matricula={matriculado.matricula}
+                reputacionInicial={
+                  reputacion ?? {
+                    totalCalificaciones: 0,
+                    promedioEstrellas: null,
+                    porcentajeValoracion: null,
+                    mostrarPublicamente: false,
+                  }
+                }
+              />
+            </>
           ) : (
             <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm sm:p-10">
               <SearchX
