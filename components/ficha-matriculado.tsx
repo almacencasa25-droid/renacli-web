@@ -4,6 +4,7 @@ import {
   MapPin,
   Phone,
   ShieldCheck,
+  Star,
   User,
   Wrench,
 } from "lucide-react"
@@ -68,11 +69,17 @@ export function FichaMatriculado({
               />
             ) : (
               <span className="flex flex-col items-center gap-1 text-muted-foreground">
-                <User className="size-7" aria-hidden="true" strokeWidth={1.5} />
+                <User
+                  className="size-7"
+                  aria-hidden="true"
+                  strokeWidth={1.5}
+                />
                 <span className="text-lg font-semibold tracking-widest">
                   {iniciales}
                 </span>
-                <span className="sr-only">Sin fotografía disponible</span>
+                <span className="sr-only">
+                  Sin fotografía disponible
+                </span>
               </span>
             )}
           </div>
@@ -81,12 +88,29 @@ export function FichaMatriculado({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Técnico matriculado
             </p>
+
             <h2 className="mt-1 text-xl font-bold leading-tight text-foreground text-balance sm:text-2xl">
               {matriculado.apellido}, {matriculado.nombre}
             </h2>
-            <p className="mt-2 font-mono text-sm font-semibold tracking-widest text-primary">
-              {matriculado.matricula}
-            </p>
+
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <p className="font-mono text-sm font-semibold tracking-widest text-primary">
+                {matriculado.matricula}
+              </p>
+
+              {mostrarEnlace ? (
+                <Link
+                  href={`/matriculado/${matriculado.matricula}#calificacion`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-background px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Star
+                    className="size-4 fill-yellow-400 text-yellow-400"
+                    aria-hidden="true"
+                  />
+                  ¿Deseás calificar?
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : (
@@ -94,9 +118,25 @@ export function FichaMatriculado({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Verificación de matrícula
           </p>
-          <h2 className="mt-1 font-mono text-xl font-bold tracking-wide text-foreground sm:text-2xl">
-            {matriculado.matricula}
-          </h2>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <h2 className="font-mono text-xl font-bold tracking-wide text-foreground sm:text-2xl">
+              {matriculado.matricula}
+            </h2>
+
+            {mostrarEnlace ? (
+              <Link
+                href={`/matriculado/${matriculado.matricula}#calificacion`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-background px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Star
+                  className="size-4 fill-yellow-400 text-yellow-400"
+                  aria-hidden="true"
+                />
+                ¿Deseás calificar?
+              </Link>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -106,26 +146,59 @@ export function FichaMatriculado({
         {autorizaPublicacion ? (
           <>
             <dl className="mt-5 grid grid-cols-1 gap-0 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-5">
-              <Dato etiqueta="Número de matrícula" valor={matriculado.matricula} destacado />
-              <Dato etiqueta="Especialidad" valor={matriculado.especialidad} />
-              <Dato etiqueta="Fecha de emisión" valor={formatearFecha(matriculado.fecha_emision)} />
-              <Dato etiqueta="Fecha de vencimiento" valor={formatearFecha(matriculado.fecha_vencimiento)} />
-              <Dato etiqueta="Localidad" valor={matriculado.localidad} />
-              <Dato etiqueta="Provincia" valor={matriculado.provincia} />
-              <Dato etiqueta="Teléfono de contacto" valor={matriculado.telefono} />
+              <Dato
+                etiqueta="Número de matrícula"
+                valor={matriculado.matricula}
+                destacado
+              />
+              <Dato
+                etiqueta="Especialidad"
+                valor={matriculado.especialidad}
+              />
+              <Dato
+                etiqueta="Fecha de emisión"
+                valor={formatearFecha(matriculado.fecha_emision)}
+              />
+              <Dato
+                etiqueta="Fecha de vencimiento"
+                valor={formatearFecha(matriculado.fecha_vencimiento)}
+              />
+              <Dato
+                etiqueta="Localidad"
+                valor={matriculado.localidad}
+              />
+              <Dato
+                etiqueta="Provincia"
+                valor={matriculado.provincia}
+              />
+              <Dato
+                etiqueta="Teléfono de contacto"
+                valor={matriculado.telefono}
+              />
             </dl>
 
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <Wrench className="size-3.5" aria-hidden="true" />
+                <Wrench
+                  className="size-3.5"
+                  aria-hidden="true"
+                />
                 {matriculado.especialidad}
               </span>
+
               <span className="inline-flex items-center gap-1.5">
-                <MapPin className="size-3.5" aria-hidden="true" />
+                <MapPin
+                  className="size-3.5"
+                  aria-hidden="true"
+                />
                 {matriculado.localidad}, {matriculado.provincia}
               </span>
+
               <span className="inline-flex items-center gap-1.5">
-                <Phone className="size-3.5" aria-hidden="true" />
+                <Phone
+                  className="size-3.5"
+                  aria-hidden="true"
+                />
                 {matriculado.telefono}
               </span>
             </div>
@@ -136,26 +209,41 @@ export function FichaMatriculado({
                 className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 Ver ficha completa del matriculado
-                <ArrowUpRight className="size-4" aria-hidden="true" />
+                <ArrowUpRight
+                  className="size-4"
+                  aria-hidden="true"
+                />
               </Link>
             ) : null}
           </>
         ) : (
           <>
             <dl className="mt-5 grid grid-cols-1 gap-0 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-5">
-              <Dato etiqueta="Número de matrícula" valor={matriculado.matricula} destacado />
-              <Dato etiqueta="Fecha de emisión" valor={formatearFecha(matriculado.fecha_emision)} />
-              <Dato etiqueta="Fecha de vencimiento" valor={formatearFecha(matriculado.fecha_vencimiento)} />
+              <Dato
+                etiqueta="Número de matrícula"
+                valor={matriculado.matricula}
+                destacado
+              />
+              <Dato
+                etiqueta="Fecha de emisión"
+                valor={formatearFecha(matriculado.fecha_emision)}
+              />
+              <Dato
+                etiqueta="Fecha de vencimiento"
+                valor={formatearFecha(matriculado.fecha_vencimiento)}
+              />
             </dl>
 
             <div className="mt-5 rounded-lg border border-border bg-muted/60 p-4">
               <p className="font-semibold text-foreground">
                 Datos personales no publicados
               </p>
+
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                El titular no autorizó la publicación pública de sus datos personales.
-                RENACLI mantiene disponible únicamente la información necesaria para
-                verificar el número de matrícula, su estado y su vigencia.
+                El titular no autorizó la publicación pública de sus datos
+                personales. RENACLI mantiene disponible únicamente la
+                información necesaria para verificar el número de matrícula,
+                su estado y su vigencia.
               </p>
             </div>
           </>
@@ -163,7 +251,11 @@ export function FichaMatriculado({
       </div>
 
       <p className="flex items-start gap-2 border-t border-border bg-muted/60 px-5 py-3 text-xs leading-relaxed text-muted-foreground sm:px-6">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <ShieldCheck
+          className="mt-0.5 size-4 shrink-0"
+          aria-hidden="true"
+        />
+
         <span className="text-pretty">
           {autorizaPublicacion
             ? "Esta ficha muestra únicamente la información cuya publicación fue autorizada. No se publican DNI, domicilio particular, correo electrónico ni observaciones administrativas."
