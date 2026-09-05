@@ -92,6 +92,10 @@ export function CalificacionTecnico({
       setHover(0)
       setEstado("ok")
       setMensaje("Tu calificación fue registrada correctamente.")
+
+      window.setTimeout(() => {
+        window.location.href = "/"
+      }, 1500)
     } catch (error) {
       setEstado("error")
 
@@ -298,14 +302,15 @@ export function CalificacionTecnico({
               ))}
             </div>
 
-            <p className="mt-2 text-sm text-muted-foreground">
-              La reputación pública se mostrará cuando este técnico
-              alcance al menos 6 calificaciones válidas.
+            <p className="mt-2 text-sm font-semibold text-foreground">
+              Valoración en proceso
             </p>
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              Calificaciones actuales:{" "}
-              {reputacion.totalCalificaciones}
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Las calificaciones de los clientes se incorporan
+              progresivamente. La valoración pública se habilita cuando
+              existe una cantidad suficiente de opiniones para ofrecer un
+              resultado representativo.
             </p>
           </div>
         )}
