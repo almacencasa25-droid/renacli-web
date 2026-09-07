@@ -990,6 +990,71 @@ async function editarMatriculado(
   )
 }
 
+async function cambiarCategoriaTecnica(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+
+  const categoriaTecnica = String(
+    formData.get("categoria_tecnica") ?? ""
+  )
+    .trim()
+    .toLowerCase()
+
+  const q = String(
+    formData.get("q") ?? ""
+  ).trim()
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0 ||
+    !["base", "inverter", "superior"].includes(
+      categoriaTecnica
+    )
+  ) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=categoria`
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+
+  const { error } = await supabase
+    .from("matriculados")
+    .update({
+      categoria_tecnica: categoriaTecnica,
+    })
+    .eq("id", id)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error cambiando categoría técnica:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=categoria`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=categoria`
+  )
+}
+
+
 async function renovarMatriculado(
   formData: FormData
 ) {
@@ -2078,6 +2143,22 @@ export default async function AdministradorPage({
           <Aviso
             texto="Datos actualizados correctamente."
             tipo="ok"
+          />
+        )}
+
+        {parametros.mensaje ===
+          "categoria" && (
+          <Aviso
+            texto="Categoría técnica actualizada correctamente. La misma matrícula RNC conserva su número y utilizará esta categoría en las credenciales vinculadas."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "categoria" && (
+          <Aviso
+            texto="No fue posible actualizar la categoría técnica."
+            tipo="error"
           />
         )}
 
@@ -3303,6 +3384,89 @@ export default async function AdministradorPage({
                         )}
                       />
                     </div>
+
+                    {!baja && (
+                      <form
+                        action={cambiarCategoriaTecnica}
+                        style={{
+                          marginTop: "22px",
+                          padding: "16px",
+                          border: "1px solid #bfdbfe",
+                          borderRadius: "12px",
+                          background: "#eff6ff",
+                        }}
+                      >
+                        <input
+                          type="hidden"
+                          name="id"
+                          value={matriculado.id}
+                        />
+
+                        <input
+                          type="hidden"
+                          name="q"
+                          value={terminoBusqueda}
+                        />
+
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#172033",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          Autorizar categoría técnica
+                        </div>
+
+                        <p
+                          style={{
+                            margin: "0 0 12px",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Usá este control únicamente después de verificar la documentación que acredita los conocimientos del técnico. El número RNC no cambia.
+                        </p>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <select
+                            name="categoria_tecnica"
+                            defaultValue={
+                              matriculado.categoria_tecnica || "base"
+                            }
+                            required
+                            style={{
+                              minWidth: "190px",
+                              padding: "11px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #94a3b8",
+                              background: "white",
+                              color: "#172033",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            <option value="base">Base</option>
+                            <option value="inverter">Inverter</option>
+                            <option value="superior">Superior</option>
+                          </select>
+
+                          <button
+                            type="submit"
+                            style={botonAzul}
+                          >
+                            Confirmar categoría
+                          </button>
+                        </div>
+                      </form>
+                    )}
 
                     <div
                       style={{
