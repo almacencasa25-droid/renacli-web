@@ -221,6 +221,22 @@ export default async function CarnetPage({
     notFound()
   }
 
+  const {
+    data: pdfVigente,
+  } = await supabase
+    .from("documentos_pdf_renacli")
+    .select("codigo_documento")
+    .eq("matriculado_id", matriculadoId)
+    .eq("activo", true)
+    .order("generado_en", {
+      ascending: false,
+    })
+    .limit(1)
+    .maybeSingle()
+
+  const codigoPdfVigente =
+    pdfVigente?.codigo_documento || null
+
   const codigo =
     codigoData[0].codigo_verificacion as string
 
@@ -282,6 +298,9 @@ export default async function CarnetPage({
             matriculadoId={matriculadoId}
             numeroMatricula={
               matriculado.numero_matricula
+            }
+            codigoPdfVigente={
+              codigoPdfVigente
             }
           />
         </div>
