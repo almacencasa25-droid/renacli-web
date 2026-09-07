@@ -42,6 +42,20 @@ type MatriculadoReferencia = {
   id: number
   numero_matricula: string | null
   apellido_nombre: string | null
+  categoria_tecnica?: string | null
+}
+
+type SolicitudCredencialPdf = {
+  matriculado_id: number
+  estado: "solicitada" | "disponible" | "entregada"
+  categoria_tecnica: string | null
+  pdf_path: string | null
+  codigo_documento: string | null
+  solicitado_en: string
+  aprobado_en: string | null
+  entregado_en: string | null
+  created_at: string
+  updated_at: string
 }
 
 type ReputacionTecnico = {
@@ -230,6 +244,81 @@ async function guardarNotaConsulta(formData: FormData) {
   )
 }
 
+async function aprobarSolicitudPdf(formData: FormData) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const matriculadoId = Number(formData.get("matriculado_id") ?? 0)
+
+  if (!Number.isInteger(matriculadoId) || matriculadoId <= 0) {
+    redirect(
+      "/administrador/comunicaciones?tab=notificaciones&error=pdf_solicitud"
+    )
+  }
+
+  const cookieStore = await cookies()
+  const token = cookieStore.get(COOKIE_NAME)?.value
+
+  if (!token) {
+    redirect("/administrador")
+  }
+
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://www.renacli.com.ar"
+  ).replace(/\/$/, "")
+
+  try {
+    const respuesta = await fetch(
+      `${baseUrl}/api/carnet-pdf/${matriculadoId}?solicitud=1`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Cookie: `${COOKIE_NAME}=${token}`,
+        },
+      }
+    )
+
+    if (!respuesta.ok) {
+      let detalle = ""
+
+      try {
+        const datos = await respuesta.json()
+        detalle = String(datos?.error ?? "")
+      } catch {
+        // Si no hay JSON, conservamos el mensaje general.
+      }
+
+      console.error(
+        "[RENACLI] Error aprobando solicitud PDF:",
+        respuesta.status,
+        detalle
+      )
+
+      redirect(
+        "/administrador/comunicaciones?tab=notificaciones&error=pdf_solicitud"
+      )
+    }
+  } catch (error) {
+    console.error(
+      "[RENACLI] Error generando PDF solicitado:",
+      error
+    )
+
+    redirect(
+      "/administrador/comunicaciones?tab=notificaciones&error=pdf_solicitud"
+    )
+  }
+
+  redirect(
+    "/administrador/comunicaciones?tab=notificaciones&mensaje=pdf_aprobado#solicitudes-pdf"
+  )
+}
+
 async function anularCalificacion(formData: FormData) {
   "use server"
 
@@ -367,6 +456,17 @@ export default async function ComunicacionesPage({
     .order("created_at", { ascending: false })
     .limit(1000)
 
+  const {
+    data: solicitudesPdfData,
+    error: errorSolicitudesPdf,
+  } = await supabase
+    .from("solicitudes_credencial_pdf")
+    .select(
+      "matriculado_id, estado, categoria_tecnica, pdf_path, codigo_documento, solicitado_en, aprobado_en, entregado_en, created_at, updated_at"
+    )
+    .order("solicitado_en", { ascending: false })
+    .limit(1000)
+
   if (errorConsultas) {
     console.error(
       "[RENACLI] Error obteniendo consultas:",
@@ -381,12 +481,24 @@ export default async function ComunicacionesPage({
     )
   }
 
+  if (errorSolicitudesPdf) {
+    console.error(
+      "[RENACLI] Error obteniendo solicitudes PDF:",
+      errorSolicitudesPdf
+    )
+  }
+
   const consultas = (consultasData ?? []) as ConsultaContacto[]
   const calificaciones =
     (calificacionesData ?? []) as CalificacionTecnico[]
+  const solicitudesPdf =
+    (solicitudesPdfData ?? []) as SolicitudCredencialPdf[]
 
   const idsMatriculados = Array.from(
-    new Set(calificaciones.map(item => item.matriculado_id))
+    new Set([
+      ...calificaciones.map(item => item.matriculado_id),
+      ...solicitudesPdf.map(item => item.matriculado_id),
+    ])
   )
 
   let matriculados: MatriculadoReferencia[] = []
@@ -397,7 +509,7 @@ export default async function ComunicacionesPage({
       error: errorMatriculados,
     } = await supabase
       .from("matriculados")
-      .select("id, numero_matricula, apellido_nombre")
+      .select("id, numero_matricula, apellido_nombre, categoria_tecnica")
       .in("id", idsMatriculados)
 
     if (errorMatriculados) {
@@ -498,6 +610,16 @@ export default async function ComunicacionesPage({
     item =>
       item.estado === "respondida" ||
       item.estado === "archivada"
+  )
+
+  const solicitudesPendientes = solicitudesPdf.filter(
+    item => item.estado === "solicitada"
+  )
+  const solicitudesDisponibles = solicitudesPdf.filter(
+    item => item.estado === "disponible"
+  )
+  const solicitudesEntregadas = solicitudesPdf.filter(
+    item => item.estado === "entregada"
   )
 
   return (
@@ -622,6 +744,18 @@ export default async function ComunicacionesPage({
             texto="No fue posible modificar la calificación."
           />
         )}
+        {parametros.mensaje === "pdf_aprobado" && (
+          <Aviso
+            tipo="ok"
+            texto="La credencial PDF fue generada y quedó disponible para el técnico."
+          />
+        )}
+        {parametros.error === "pdf_solicitud" && (
+          <Aviso
+            tipo="error"
+            texto="No fue posible aprobar o generar la credencial PDF solicitada."
+          />
+        )}
 
         <nav
           style={{
@@ -657,7 +791,7 @@ export default async function ComunicacionesPage({
           >
             Notificaciones
             <span style={contadorSolapa}>
-              {pendientes.length + seguimiento.length}
+              {pendientes.length + seguimiento.length + solicitudesPendientes.length + solicitudesDisponibles.length}
             </span>
           </Link>
         </nav>
@@ -834,6 +968,127 @@ export default async function ComunicacionesPage({
           </section>
         ) : (
           <section id="notificaciones">
+            <section id="solicitudes-pdf" style={{ scrollMarginTop: "20px" }}>
+              <h3 style={tituloSeccion}>Solicitudes de credencial PDF</h3>
+              <p style={textoAyuda}>
+                Solicitudes realizadas desde la credencial digital. RENACLI
+                genera el documento solamente después de la aprobación del
+                administrador.
+              </p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "18px",
+                }}
+              >
+                <Resumen
+                  numero={solicitudesPendientes.length}
+                  texto="PDF por aprobar"
+                />
+                <Resumen
+                  numero={solicitudesDisponibles.length}
+                  texto="PDF disponibles"
+                />
+                <Resumen
+                  numero={solicitudesEntregadas.length}
+                  texto="PDF entregados"
+                />
+              </div>
+
+              {solicitudesPendientes.length === 0 ? (
+                <Vacio texto="No hay solicitudes de credencial PDF pendientes." />
+              ) : (
+                solicitudesPendientes.map(solicitud => (
+                  <SolicitudPdfCard
+                    key={solicitud.matriculado_id}
+                    solicitud={solicitud}
+                    tecnico={matriculadosPorId.get(solicitud.matriculado_id)}
+                  />
+                ))
+              )}
+
+              {solicitudesDisponibles.length > 0 && (
+                <details
+                  style={{
+                    ...tarjeta,
+                    marginTop: "16px",
+                    padding: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      padding: "16px 18px",
+                      fontWeight: "bold",
+                      color: "#172033",
+                      listStylePosition: "inside",
+                    }}
+                  >
+                    Disponibles para el técnico ({solicitudesDisponibles.length})
+                  </summary>
+                  <div
+                    style={{
+                      padding: "14px 18px 4px",
+                      borderTop: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    {solicitudesDisponibles.map(solicitud => (
+                      <SolicitudPdfCard
+                        key={solicitud.matriculado_id}
+                        solicitud={solicitud}
+                        tecnico={matriculadosPorId.get(solicitud.matriculado_id)}
+                      />
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {solicitudesEntregadas.length > 0 && (
+                <details
+                  style={{
+                    ...tarjeta,
+                    marginTop: "16px",
+                    marginBottom: "30px",
+                    padding: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      padding: "16px 18px",
+                      fontWeight: "bold",
+                      color: "#172033",
+                      listStylePosition: "inside",
+                    }}
+                  >
+                    Historial de PDF entregados ({solicitudesEntregadas.length})
+                  </summary>
+                  <div
+                    style={{
+                      padding: "14px 18px 4px",
+                      borderTop: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    {solicitudesEntregadas.map(solicitud => (
+                      <SolicitudPdfCard
+                        key={solicitud.matriculado_id}
+                        solicitud={solicitud}
+                        tecnico={matriculadosPorId.get(solicitud.matriculado_id)}
+                      />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </section>
+
             <div
               style={{
                 display: "grid",
@@ -944,6 +1199,174 @@ export default async function ComunicacionesPage({
         )}
       </section>
     </main>
+  )
+}
+
+function SolicitudPdfCard({
+  solicitud,
+  tecnico,
+}: {
+  solicitud: SolicitudCredencialPdf
+  tecnico?: MatriculadoReferencia
+}) {
+  const categoria =
+    solicitud.categoria_tecnica ||
+    tecnico?.categoria_tecnica ||
+    "base"
+
+  const etiquetaCategoria =
+    categoria === "inverter"
+      ? "Inverter"
+      : categoria === "superior"
+        ? "Superior"
+        : "Base"
+
+  const estadoTexto =
+    solicitud.estado === "solicitada"
+      ? "Pendiente de aprobación"
+      : solicitud.estado === "disponible"
+        ? "Disponible para el técnico"
+        : "Entregada"
+
+  return (
+    <article
+      style={{
+        ...tarjeta,
+        marginBottom: "14px",
+        border:
+          solicitud.estado === "solicitada"
+            ? "1px solid #f5c451"
+            : solicitud.estado === "disponible"
+              ? "1px solid #86efac"
+              : "1px solid #cbd5e1",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "14px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <p
+            style={{
+              margin: "0 0 5px",
+              color: "#0d5689",
+              fontSize: "12px",
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: "0.7px",
+            }}
+          >
+            Solicitud de credencial PDF
+          </p>
+          <h4
+            style={{
+              margin: "0 0 5px",
+              color: "#172033",
+              fontSize: "18px",
+            }}
+          >
+            {tecnico?.apellido_nombre || "Técnico matriculado"}
+          </h4>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+            Solicitada {formatearFechaHora(solicitud.solicitado_en)}
+          </p>
+        </div>
+
+        <span
+          style={{
+            display: "inline-block",
+            padding: "6px 10px",
+            borderRadius: "999px",
+            fontSize: "12px",
+            fontWeight: "bold",
+            background:
+              solicitud.estado === "solicitada"
+                ? "#fffbeb"
+                : solicitud.estado === "disponible"
+                  ? "#f0fdf4"
+                  : "#f1f5f9",
+            color:
+              solicitud.estado === "solicitada"
+                ? "#92400e"
+                : solicitud.estado === "disponible"
+                  ? "#166534"
+                  : "#475569",
+          }}
+        >
+          {estadoTexto}
+        </span>
+      </div>
+
+      <div
+        style={{
+          marginTop: "16px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "12px",
+        }}
+      >
+        <Dato
+          etiqueta="Matrícula"
+          valor={tecnico?.numero_matricula || "No disponible"}
+        />
+        <Dato etiqueta="Categoría" valor={etiquetaCategoria} />
+        {solicitud.codigo_documento ? (
+          <Dato
+            etiqueta="Código PDF"
+            valor={solicitud.codigo_documento}
+          />
+        ) : null}
+        {solicitud.aprobado_en ? (
+          <Dato
+            etiqueta="Aprobado"
+            valor={formatearFechaHora(solicitud.aprobado_en)}
+          />
+        ) : null}
+        {solicitud.entregado_en ? (
+          <Dato
+            etiqueta="Entregado"
+            valor={formatearFechaHora(solicitud.entregado_en)}
+          />
+        ) : null}
+      </div>
+
+      {solicitud.estado === "solicitada" ? (
+        <form
+          action={aprobarSolicitudPdf}
+          style={{
+            marginTop: "16px",
+            paddingTop: "16px",
+            borderTop: "1px solid #e2e8f0",
+          }}
+        >
+          <input
+            type="hidden"
+            name="matriculado_id"
+            value={solicitud.matriculado_id}
+          />
+          <p
+            style={{
+              margin: "0 0 10px",
+              color: "#64748b",
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            Al aprobar se generará un nuevo documento con código único, se
+            registrará en RENACLI y quedará disponible en la credencial del
+            técnico.
+          </p>
+          <button type="submit" style={botonAzul}>
+            Aprobar y generar PDF
+          </button>
+        </form>
+      ) : null}
+    </article>
   )
 }
 
