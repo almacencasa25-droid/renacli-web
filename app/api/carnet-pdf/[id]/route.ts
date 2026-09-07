@@ -888,13 +888,81 @@ export async function GET(
       )
     }
 
+    /*
+      Guardamos una única copia privada del PDF vigente para Administración.
+      Siempre usa la misma ruta por técnico, por lo que un PDF nuevo reemplaza
+      al anterior sin acumular archivos.
+    */
+    const pdfPathAdministrador =
+      `administrador/${matriculado.id}/vigente.pdf`
+
+    const {
+      error: errorUploadAdministrador,
+    } = await supabase.storage
+      .from("credenciales-pdf")
+      .upload(
+        pdfPathAdministrador,
+        Buffer.from(pdfBytes),
+        {
+          contentType: "application/pdf",
+          cacheControl: "0",
+          upsert: true,
+        },
+      )
+
+    if (errorUploadAdministrador) {
+      console.error(
+        "Error guardando PDF vigente para Administración:",
+        errorUploadAdministrador,
+      )
+
+      return NextResponse.json(
+        {
+          error:
+            "El PDF fue registrado, pero no se pudo guardar como PDF vigente.",
+        },
+        { status: 500 },
+      )
+    }
+
+    const {
+      error: errorActualizarPath,
+    } = await supabase
+      .from("documentos_pdf_renacli")
+      .update({
+        pdf_path: pdfPathAdministrador,
+      })
+      .eq("matriculado_id", matriculado.id)
+      .eq("codigo_documento", codigoDocumento)
+      .eq("activo", true)
+
+    if (errorActualizarPath) {
+      console.error(
+        "Error vinculando PDF vigente con su registro:",
+        errorActualizarPath,
+      )
+
+      await supabase.storage
+        .from("credenciales-pdf")
+        .remove([pdfPathAdministrador])
+
+      return NextResponse.json(
+        {
+          error:
+            "El PDF fue generado, pero no se pudo vincular con su registro vigente.",
+        },
+        { status: 500 },
+      )
+    }
+
     const nombreSeguro = matriculado.numero_matricula.replace(
       /[^A-Za-z0-9_-]/g,
       "_",
     )
 
     if (guardarSolicitud) {
-      const pdfPath = `${matriculado.id}/${codigoDocumento}.pdf`
+      const pdfPath =
+        `solicitudes/${matriculado.id}/${codigoDocumento}.pdf`
 
       const { error: errorUpload } = await supabase.storage
         .from("credenciales-pdf")
