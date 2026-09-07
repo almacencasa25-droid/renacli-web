@@ -1,283 +1,152 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createClient } from "@supabase/supabase-js"
-import {
-  createHash,
-  timingSafeEqual,
-} from "crypto"
+"use client"
 
-export const runtime = "nodejs"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
-const COOKIE_ADMIN = "renacli_admin_session"
-
-type RouteProps = {
-  params: Promise<{
-    id: string
-  }>
+type BotonPdfCarnetProps = {
+  matriculadoId: number
+  numeroMatricula: string
+  codigoPdfVigente?: string | null
 }
 
-function obtenerSupabaseAdmin() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL
+export function BotonPdfCarnet({
+  matriculadoId,
+  numeroMatricula,
+  codigoPdfVigente = null,
+}: BotonPdfCarnetProps) {
+  const router = useRouter()
 
-  const secretKey =
-    process.env.SUPABASE_SECRET_KEY
+  const [generando, setGenerando] =
+    useState(false)
 
-  if (!url || !secretKey) {
-    throw new Error(
-      "Faltan las variables de entorno de Supabase.",
-    )
+  const [pdfUrl, setPdfUrl] =
+    useState<string | null>(null)
+
+  const [error, setError] =
+    useState("")
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl)
+      }
+    }
+  }, [pdfUrl])
+
+  async function generarPdf() {
+    if (codigoPdfVigente) {
+      const confirmar = window.confirm(
+        "Ya existe un PDF vigente para este técnico.\n\n" +
+          "Si genera uno nuevo, el PDF vigente actual será anulado.\n\n" +
+          "¿Desea generar un nuevo PDF?",
+      )
+
+      if (!confirmar) {
+        return
+      }
+    }
+
+    setGenerando(true)
+    setError("")
+
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl)
+      setPdfUrl(null)
+    }
+
+    try {
+      const respuesta = await fetch(
+        `/api/carnet-pdf/${matriculadoId}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      )
+
+      if (!respuesta.ok) {
+        let mensaje =
+          "No se pudo generar el PDF de la credencial."
+
+        try {
+          const datos =
+            await respuesta.json()
+
+          if (datos?.error) {
+            mensaje = datos.error
+          }
+        } catch {
+          // Se mantiene el mensaje general.
+        }
+
+        throw new Error(mensaje)
+      }
+
+      const blob =
+        await respuesta.blob()
+
+      const url =
+        URL.createObjectURL(blob)
+
+      setPdfUrl(url)
+
+      router.refresh()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo generar el PDF.",
+      )
+    } finally {
+      setGenerando(false)
+    }
   }
 
-  return createClient(
-    url,
-    secretKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    },
+  const nombreArchivo =
+    `Credencial-RENACLI-${numeroMatricula}.pdf`
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {codigoPdfVigente ? (
+        <a
+          href={`/verificar-documento/${encodeURIComponent(
+            codigoPdfVigente,
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-blue-950 bg-white px-4 py-2 text-sm font-bold text-blue-950 transition hover:bg-blue-50"
+        >
+          Ver PDF vigente
+        </a>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={generarPdf}
+        disabled={generando}
+        className="rounded-lg bg-blue-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {generando
+          ? "Generando PDF..."
+          : codigoPdfVigente
+            ? "Generar otro PDF"
+            : "Generar PDF"}
+      </button>
+
+      {pdfUrl ? (
+        <a
+          href={pdfUrl}
+          download={nombreArchivo}
+          className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-800"
+        >
+          Descargar nuevo PDF
+        </a>
+      ) : null}
+
+      {error ? (
+        <p className="basis-full text-right text-sm font-semibold text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </div>
   )
-}
-
-function crearTokenAdmin(
-  password: string,
-) {
-  return createHash("sha256")
-    .update(password)
-    .digest("hex")
-}
-
-async function adminAutorizado() {
-  const cookieStore =
-    await cookies()
-
-  const sesion =
-    cookieStore.get(
-      COOKIE_ADMIN,
-    )?.value
-
-  const password =
-    process.env.RENACLI_ADMIN_PASSWORD
-
-  if (!sesion || !password) {
-    return false
-  }
-
-  const esperado =
-    crearTokenAdmin(password)
-
-  const a =
-    Buffer.from(sesion)
-
-  const b =
-    Buffer.from(esperado)
-
-  if (a.length !== b.length) {
-    return false
-  }
-
-  return timingSafeEqual(a, b)
-}
-
-export async function GET(
-  _request: Request,
-  {
-    params,
-  }: RouteProps,
-) {
-  try {
-    const autorizado =
-      await adminAutorizado()
-
-    if (!autorizado) {
-      return NextResponse.json(
-        {
-          error:
-            "No autorizado.",
-        },
-        {
-          status: 401,
-        },
-      )
-    }
-
-    const {
-      id,
-    } = await params
-
-    const matriculadoId =
-      Number(id)
-
-    if (
-      !Number.isInteger(
-        matriculadoId,
-      ) ||
-      matriculadoId <= 0
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "ID inválido.",
-        },
-        {
-          status: 400,
-        },
-      )
-    }
-
-    const supabase =
-      obtenerSupabaseAdmin()
-
-    const {
-      data: documento,
-      error: errorDocumento,
-    } = await supabase
-      .from(
-        "documentos_pdf_renacli",
-      )
-      .select(
-        "codigo_documento, numero_matricula, pdf_path",
-      )
-      .eq(
-        "matriculado_id",
-        matriculadoId,
-      )
-      .eq(
-        "activo",
-        true,
-      )
-      .order(
-        "generado_en",
-        {
-          ascending: false,
-        },
-      )
-      .limit(1)
-      .maybeSingle()
-
-    if (
-      errorDocumento
-    ) {
-      console.error(
-        "Error buscando PDF vigente:",
-        errorDocumento,
-      )
-
-      return NextResponse.json(
-        {
-          error:
-            "No se pudo consultar el PDF vigente.",
-        },
-        {
-          status: 500,
-        },
-      )
-    }
-
-    if (!documento) {
-      return NextResponse.json(
-        {
-          error:
-            "No existe un PDF vigente para este técnico.",
-        },
-        {
-          status: 404,
-        },
-      )
-    }
-
-    if (
-      !documento.pdf_path
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "El PDF vigente fue generado antes de habilitar el almacenamiento del archivo. Debe generar uno nuevo para poder visualizarlo.",
-        },
-        {
-          status: 404,
-        },
-      )
-    }
-
-    const {
-      data: archivo,
-      error: errorArchivo,
-    } = await supabase.storage
-      .from(
-        "credenciales-pdf",
-      )
-      .download(
-        documento.pdf_path,
-      )
-
-    if (
-      errorArchivo ||
-      !archivo
-    ) {
-      console.error(
-        "Error descargando PDF vigente:",
-        errorArchivo,
-      )
-
-      return NextResponse.json(
-        {
-          error:
-            "No se encontró el archivo PDF vigente.",
-        },
-        {
-          status: 404,
-        },
-      )
-    }
-
-    const bytes =
-      await archivo.arrayBuffer()
-
-    const matriculaSegura =
-      (
-        documento.numero_matricula ||
-        "RENACLI"
-      ).replace(
-        /[^A-Za-z0-9_-]/g,
-        "_",
-      )
-
-    return new NextResponse(
-      Buffer.from(bytes),
-      {
-        status: 200,
-        headers: {
-          "Content-Type":
-            "application/pdf",
-
-          "Content-Disposition":
-            `inline; filename="Credencial-RENACLI-${matriculaSegura}.pdf"`,
-
-          "Cache-Control":
-            "private, no-store, max-age=0",
-
-          "X-RENACLI-Document-Code":
-            documento.codigo_documento,
-        },
-      },
-    )
-  } catch (error) {
-    console.error(
-      "Error mostrando PDF vigente:",
-      error,
-    )
-
-    return NextResponse.json(
-      {
-        error:
-          "No se pudo abrir el PDF vigente.",
-      },
-      {
-        status: 500,
-      },
-    )
-  }
 }
