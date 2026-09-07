@@ -15,6 +15,7 @@ type DocumentoVerificado = {
   fecha_vencimiento: string | null
   generado_en: string
   activo: boolean
+  categoria_tecnica: string | null
 }
 
 function obtenerSupabaseServidor() {
@@ -51,6 +52,28 @@ function formatearFechaHora(fecha: string) {
   return new Date(fecha).toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
   })
+}
+
+function formatearCategoria(
+  categoria: string | null,
+) {
+  if (!categoria) {
+    return null
+  }
+
+  switch (categoria.toLowerCase()) {
+    case "base":
+      return "Base"
+
+    case "inverter":
+      return "Inverter"
+
+    case "superior":
+      return "Superior"
+
+    default:
+      return categoria
+  }
 }
 
 export default async function VerificarDocumentoPage({
@@ -212,6 +235,11 @@ export default async function VerificarDocumentoPage({
   const documentoActivo =
     documento.activo === true
 
+  const categoria =
+    formatearCategoria(
+      documento.categoria_tecnica,
+    )
+
   return (
     <main
       style={{
@@ -332,6 +360,13 @@ export default async function VerificarDocumentoPage({
               titulo="Matrícula"
               valor={documento.numero_matricula}
             />
+
+            {categoria ? (
+              <Dato
+                titulo="Categoría técnica"
+                valor={categoria}
+              />
+            ) : null}
 
             <Dato
               titulo="Estado al emitir"
