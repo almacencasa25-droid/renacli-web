@@ -130,7 +130,7 @@ export default function Home() {
               Accesos rápidos
             </p>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <a
                 href="#verificar"
                 className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
@@ -140,6 +140,7 @@ export default function Home() {
                   aria-hidden="true"
                   strokeWidth={1.75}
                 />
+
                 <span className="text-sm font-semibold text-foreground">
                   Verificar matrícula
                 </span>
@@ -154,10 +155,26 @@ export default function Home() {
                   aria-hidden="true"
                   strokeWidth={1.75}
                 />
+
                 <span className="text-sm font-semibold text-foreground">
                   Credencial digital
                 </span>
               </a>
+
+              <Link
+                href="/tramite"
+                className="flex min-h-[78px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-center transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <RefreshCw
+                  className="size-5 text-primary"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+
+                <span className="text-sm font-semibold text-foreground">
+                  Consultar trámite
+                </span>
+              </Link>
 
               <a
                 href="#contacto"
@@ -168,6 +185,7 @@ export default function Home() {
                   aria-hidden="true"
                   strokeWidth={1.75}
                 />
+
                 <span className="text-sm font-semibold text-foreground">
                   Contactar
                 </span>
@@ -182,6 +200,7 @@ export default function Home() {
                   aria-hidden="true"
                   strokeWidth={1.75}
                 />
+
                 <span className="text-sm font-semibold text-foreground">
                   Información
                 </span>
@@ -328,7 +347,9 @@ export default function Home() {
                       />
                     </span>
 
-                    <span className="flex-1">{item.titulo}</span>
+                    <span className="flex-1">
+                      {item.titulo}
+                    </span>
 
                     <span
                       className="text-xl font-normal text-muted-foreground transition-transform group-open:rotate-45"
@@ -349,13 +370,19 @@ export default function Home() {
                             className="mt-2 size-1.5 shrink-0 rounded-full bg-primary"
                             aria-hidden="true"
                           />
-                          <span>{punto}</span>
+
+                          <span>
+                            {punto}
+                          </span>
                         </li>
                       ))}
                     </ul>
 
                     <div className="mt-5 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm leading-relaxed text-foreground">
-                      <strong>Importante:</strong> {item.nota}
+                      <strong>
+                        Importante:
+                      </strong>{" "}
+                      {item.nota}
                     </div>
                   </div>
                 </details>
