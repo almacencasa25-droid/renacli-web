@@ -11,6 +11,11 @@ type PageProps = {
   params: Promise<{ id: string }>
 }
 
+type CategoriaTecnica =
+  | "base"
+  | "inverter"
+  | "superior"
+
 function obtenerSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const secretKey = process.env.SUPABASE_SECRET_KEY
@@ -86,7 +91,80 @@ function obtenerEstadoEfectivo(
   return estadoNormalizado
 }
 
-export default async function CarnetPage({ params }: PageProps) {
+function normalizarCategoria(
+  categoria: string | null,
+): CategoriaTecnica {
+  const valor = (categoria || "base")
+    .trim()
+    .toLowerCase()
+
+  if (valor === "inverter") {
+    return "inverter"
+  }
+
+  if (valor === "superior") {
+    return "superior"
+  }
+
+  return "base"
+}
+
+function obtenerConfiguracionCategoria(
+  categoria: CategoriaTecnica,
+) {
+  if (categoria === "inverter") {
+    return {
+      nombre: "INVERTER",
+      descripcion:
+        "Técnico con conocimientos en tecnología Inverter.",
+      logo: "bg-emerald-800",
+      titulo: "text-emerald-900",
+      subtitulo: "text-emerald-700",
+      destacado: "text-emerald-900",
+      insignia:
+        "border-emerald-200 bg-emerald-50 text-emerald-800",
+      footer:
+        "border-emerald-200 bg-emerald-50",
+      footerTitulo: "text-emerald-900",
+    }
+  }
+
+  if (categoria === "superior") {
+    return {
+      nombre: "SUPERIOR",
+      descripcion:
+        "Incluye conocimientos de categoría Base e Inverter, equipos piso-techo, sistemas centrales y cámaras frigoríficas.",
+      logo: "bg-amber-700",
+      titulo: "text-amber-800",
+      subtitulo: "text-amber-700",
+      destacado: "text-amber-800",
+      insignia:
+        "border-amber-300 bg-amber-50 text-amber-800",
+      footer:
+        "border-amber-200 bg-amber-50",
+      footerTitulo: "text-amber-800",
+    }
+  }
+
+  return {
+    nombre: "BASE",
+    descripcion:
+      "Acreditación técnica Base RENACLI.",
+    logo: "bg-blue-950",
+    titulo: "text-blue-950",
+    subtitulo: "text-blue-800",
+    destacado: "text-blue-950",
+    insignia:
+      "border-blue-200 bg-blue-50 text-blue-900",
+    footer:
+      "border-slate-200 bg-slate-50",
+    footerTitulo: "text-blue-950",
+  }
+}
+
+export default async function CarnetPage({
+  params,
+}: PageProps) {
   const cookieStore = await cookies()
   const sesion = cookieStore.get(COOKIE_ADMIN)?.value
 
@@ -97,58 +175,97 @@ export default async function CarnetPage({ params }: PageProps) {
   const { id } = await params
   const matriculadoId = Number(id)
 
-  if (!Number.isInteger(matriculadoId) || matriculadoId <= 0) {
+  if (
+    !Number.isInteger(matriculadoId) ||
+    matriculadoId <= 0
+  ) {
     notFound()
   }
 
   const supabase = obtenerSupabaseAdmin()
 
-  const { data: matriculado, error: errorMatriculado } = await supabase
+  const {
+    data: matriculado,
+    error: errorMatriculado,
+  } = await supabase
     .from("matriculados")
     .select(
-      "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado",
+      "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado, categoria_tecnica",
     )
     .eq("id", matriculadoId)
     .maybeSingle()
 
-  if (errorMatriculado || !matriculado || !matriculado.numero_matricula) {
+  if (
+    errorMatriculado ||
+    !matriculado ||
+    !matriculado.numero_matricula
+  ) {
     notFound()
   }
 
-  const { data: codigoData, error: errorCodigo } = await supabase.rpc(
+  const {
+    data: codigoData,
+    error: errorCodigo,
+  } = await supabase.rpc(
     "obtener_codigo_qr_actual",
     {
       p_matriculado_id: matriculadoId,
     },
   )
 
-  if (errorCodigo || !codigoData || codigoData.length === 0) {
+  if (
+    errorCodigo ||
+    !codigoData ||
+    codigoData.length === 0
+  ) {
     notFound()
   }
 
-  const codigo = codigoData[0].codigo_verificacion as string
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://renacli-web.vercel.app"
+  const codigo =
+    codigoData[0].codigo_verificacion as string
 
-  const urlVerificacion = `${baseUrl}/verificar/${codigo}`
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://www.renacli.com.ar"
+  ).replace(/\/+$/, "")
 
-  const qrDataUrl = await QRCode.toDataURL(urlVerificacion, {
-    width: 420,
-    margin: 1,
-    errorCorrectionLevel: "M",
-  })
+  const urlVerificacion =
+    `${baseUrl}/verificar/${codigo}`
 
-  const fechaEmisionCredencial =
-    matriculado.fecha_ultima_acreditacion || matriculado.fecha_emision
-
-  const estadoEfectivo = obtenerEstadoEfectivo(
-    matriculado.estado,
-    matriculado.fecha_vencimiento,
+  const qrDataUrl = await QRCode.toDataURL(
+    urlVerificacion,
+    {
+      width: 420,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    },
   )
 
-  const fotoUrlFirmada = matriculado.foto_url
-    ? await crearUrlFirmadaFoto(matriculado.foto_url, 300)
-    : null
+  const fechaEmisionCredencial =
+    matriculado.fecha_ultima_acreditacion ||
+    matriculado.fecha_emision
+
+  const estadoEfectivo =
+    obtenerEstadoEfectivo(
+      matriculado.estado,
+      matriculado.fecha_vencimiento,
+    )
+
+  const fotoUrlFirmada =
+    matriculado.foto_url
+      ? await crearUrlFirmadaFoto(
+          matriculado.foto_url,
+          300,
+        )
+      : null
+
+  const categoria =
+    normalizarCategoria(
+      matriculado.categoria_tecnica,
+    )
+
+  const estiloCategoria =
+    obtenerConfiguracionCategoria(categoria)
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950">
@@ -163,32 +280,48 @@ export default async function CarnetPage({ params }: PageProps) {
 
           <BotonPdfCarnet
             matriculadoId={matriculadoId}
-            numeroMatricula={matriculado.numero_matricula}
+            numeroMatricula={
+              matriculado.numero_matricula
+            }
           />
         </div>
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl print:shadow-none">
           <header className="border-b border-slate-200 px-7 py-7 sm:px-10">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-950 text-3xl font-black text-white">
-                R
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`flex h-16 w-16 items-center justify-center rounded-2xl text-3xl font-black text-white ${estiloCategoria.logo}`}
+                >
+                  R
+                </div>
+
+                <div>
+                  <h1
+                    className={`text-4xl font-black tracking-wide ${estiloCategoria.titulo}`}
+                  >
+                    RENACLI
+                  </h1>
+
+                  <p className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-600">
+                    Registro Nacional de Climatización y Refrigeración
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <h1 className="text-4xl font-black tracking-wide text-blue-950">
-                  RENACLI
-                </h1>
-
-                <p className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-600">
-                  Registro Nacional de Climatización y Refrigeración
-                </p>
+              <div
+                className={`rounded-full border px-4 py-2 text-sm font-black tracking-wider ${estiloCategoria.insignia}`}
+              >
+                CATEGORÍA {estiloCategoria.nombre}
               </div>
             </div>
           </header>
 
           <div className="grid gap-8 p-7 sm:grid-cols-[1fr_240px] sm:p-10">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-800">
+              <p
+                className={`text-xs font-bold uppercase tracking-widest ${estiloCategoria.subtitulo}`}
+              >
                 Credencial de técnico matriculado
               </p>
 
@@ -196,40 +329,74 @@ export default async function CarnetPage({ params }: PageProps) {
                 {matriculado.apellido_nombre}
               </h2>
 
+              <div
+                className={`mt-5 rounded-xl border px-4 py-3 text-sm font-semibold leading-relaxed ${estiloCategoria.insignia}`}
+              >
+                <span className="font-black">
+                  Categoría {estiloCategoria.nombre}:
+                </span>{" "}
+                {estiloCategoria.descripcion}
+              </div>
+
               <div className="mt-7 grid gap-5 sm:grid-cols-2">
                 <Dato
                   titulo="Matrícula"
-                  valor={matriculado.numero_matricula}
+                  valor={
+                    matriculado.numero_matricula
+                  }
                   destacado
+                  destacadoClass={
+                    estiloCategoria.destacado
+                  }
+                />
+
+                <Dato
+                  titulo="Categoría técnica"
+                  valor={
+                    estiloCategoria.nombre
+                  }
                 />
 
                 <Dato
                   titulo="Estado"
-                  valor={estadoEfectivo.toUpperCase()}
+                  valor={
+                    estadoEfectivo.toUpperCase()
+                  }
                 />
 
                 <Dato
                   titulo="Especialidad"
-                  valor={matriculado.especialidad || "No informada"}
+                  valor={
+                    matriculado.especialidad ||
+                    "No informada"
+                  }
                 />
 
                 <Dato
                   titulo="Localidad / Provincia"
                   valor={
-                    [matriculado.localidad, matriculado.provincia]
+                    [
+                      matriculado.localidad,
+                      matriculado.provincia,
+                    ]
                       .filter(Boolean)
-                      .join(", ") || "No informado"
+                      .join(", ") ||
+                    "No informado"
                   }
                 />
 
                 <Dato
                   titulo="Emisión"
-                  valor={formatearFecha(fechaEmisionCredencial)}
+                  valor={formatearFecha(
+                    fechaEmisionCredencial,
+                  )}
                 />
 
                 <Dato
                   titulo="Vencimiento"
-                  valor={formatearFecha(matriculado.fecha_vencimiento)}
+                  valor={formatearFecha(
+                    matriculado.fecha_vencimiento,
+                  )}
                 />
 
                 {matriculado.telefono ? (
@@ -268,8 +435,12 @@ export default async function CarnetPage({ params }: PageProps) {
             </aside>
           </div>
 
-          <footer className="border-t border-slate-200 bg-slate-50 px-7 py-5 text-center sm:px-10">
-            <p className="text-sm font-bold text-blue-950">
+          <footer
+            className={`border-t px-7 py-5 text-center sm:px-10 ${estiloCategoria.footer}`}
+          >
+            <p
+              className={`text-sm font-bold ${estiloCategoria.footerTitulo}`}
+            >
               RENACLI · Registro Nacional de Climatización y Refrigeración
             </p>
 
@@ -287,10 +458,12 @@ function Dato({
   titulo,
   valor,
   destacado = false,
+  destacadoClass = "text-blue-950",
 }: {
   titulo: string
   valor: string
   destacado?: boolean
+  destacadoClass?: string
 }) {
   return (
     <div>
@@ -301,7 +474,7 @@ function Dato({
       <p
         className={
           destacado
-            ? "mt-1 text-xl font-black text-blue-950"
+            ? `mt-1 text-xl font-black ${destacadoClass}`
             : "mt-1 text-base font-semibold text-slate-900"
         }
       >
