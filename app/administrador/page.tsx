@@ -22,6 +22,7 @@ type MatriculadoAdmin = {
   fecha_vencimiento: string | null
   estado: string | null
   especialidad: string | null
+  categoria_tecnica: "base" | "inverter" | "superior" | null
   foto_url: string | null
   foto_url_visualizacion?: string | null
   codigo_qr: string | null
@@ -428,6 +429,7 @@ async function crearMatriculado(formData: FormData) {
       apellido_nombre: apellidoNombre,
       dni,
       especialidad,
+      categoria_tecnica: "base",
       localidad,
       provincia,
       telefono,
@@ -918,6 +920,10 @@ async function editarMatriculado(
     formData.get("especialidad") ?? ""
   ).trim()
 
+  const categoriaTecnica = String(
+    formData.get("categoria_tecnica") ?? "base"
+  ).trim().toLowerCase()
+
   const fechaEmision = String(
     formData.get("fecha_emision") ?? ""
   ).trim()
@@ -935,6 +941,7 @@ async function editarMatriculado(
     !apellidoNombre ||
     !dni ||
     !especialidad ||
+    !["base", "inverter", "superior"].includes(categoriaTecnica) ||
     !localidad ||
     !provincia
   ) {
@@ -956,6 +963,7 @@ async function editarMatriculado(
       localidad,
       provincia,
       especialidad,
+      categoria_tecnica: categoriaTecnica,
       fecha_emision:
         fechaEmision || null,
       fecha_vencimiento:
@@ -1282,6 +1290,7 @@ async function buscarMatriculados(
         fecha_vencimiento,
         estado,
         especialidad,
+        categoria_tecnica,
         foto_url,
         codigo_qr,
         observaciones,
@@ -2442,6 +2451,16 @@ export default async function AdministradorPage({
                   requerido
                 />
 
+                <label style={{ display: "block" }}>
+                  <span style={{ display: "block", fontWeight: "bold", marginBottom: "8px" }}>Categoría técnica</span>
+                  <select name="categoria_tecnica" defaultValue={matriculadoEditar.categoria_tecnica || "base"} required style={{ width: "100%", boxSizing: "border-box", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "white" }}>
+                    <option value="base">Base — Climatización y refrigeración</option>
+                    <option value="inverter">Inverter — Tecnología Inverter</option>
+                    <option value="superior">Superior — Inverter, piso-techo, centrales y cámaras</option>
+                  </select>
+                  <small style={{ display: "block", marginTop: "6px", color: "#64748b", lineHeight: 1.4 }}>La ampliación se autoriza manualmente luego de comprobar la documentación presentada.</small>
+                </label>
+
                 <Campo
                   nombre="fecha_emision"
                   etiqueta="Fecha de emisión"
@@ -2761,6 +2780,13 @@ export default async function AdministradorPage({
                   etiqueta="Especialidad"
                   requerido
                 />
+
+                <input type="hidden" name="categoria_tecnica" value="base" />
+
+                <div style={{ padding: "12px", borderRadius: "8px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a5f", lineHeight: 1.45 }}>
+                  <strong>Categoría inicial: Base</strong><br />
+                  Las ampliaciones a Inverter o Superior se habilitan posteriormente desde el administrador, una vez comprobada la documentación.
+                </div>
 
                 <Campo
                   nombre="telefono"
@@ -3228,6 +3254,17 @@ export default async function AdministradorPage({
                         titulo="Especialidad"
                         valor={
                           matriculado.especialidad
+                        }
+                      />
+
+                      <Dato
+                        titulo="Categoría técnica"
+                        valor={
+                          matriculado.categoria_tecnica === "superior"
+                            ? "Superior"
+                            : matriculado.categoria_tecnica === "inverter"
+                              ? "Inverter"
+                              : "Base"
                         }
                       />
 
