@@ -244,7 +244,7 @@ function envolverTextoPorAncho(
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteProps,
 ) {
   try {
@@ -275,7 +275,7 @@ export async function GET(
     } = await supabase
       .from("matriculados")
       .select(
-        "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado",
+        "id, numero_matricula, apellido_nombre, localidad, provincia, especialidad, telefono, foto_url, fecha_emision, fecha_ultima_acreditacion, fecha_vencimiento, estado, categoria_tecnica",
       )
       .eq("id", matriculadoId)
       .maybeSingle()
@@ -314,9 +314,37 @@ export async function GET(
 
     const codigo = codigoData[0].codigo_verificacion as string
 
-    const baseUrl =
+    const baseUrl = (
       process.env.NEXT_PUBLIC_SITE_URL ||
-      "https://renacli-web.vercel.app"
+      "https://www.renacli.com.ar"
+    ).replace(/\/$/, "")
+
+    const guardarSolicitud =
+      new URL(request.url).searchParams.get("solicitud") === "1"
+
+    if (guardarSolicitud) {
+      const { data: solicitud, error: errorSolicitud } = await supabase
+        .from("solicitudes_credencial_pdf")
+        .select("matriculado_id, estado")
+        .eq("matriculado_id", matriculadoId)
+        .maybeSingle()
+
+      if (errorSolicitud) {
+        console.error("Error leyendo solicitud PDF:", errorSolicitud)
+
+        return NextResponse.json(
+          { error: "No se pudo verificar la solicitud PDF." },
+          { status: 500 },
+        )
+      }
+
+      if (!solicitud || solicitud.estado !== "solicitada") {
+        return NextResponse.json(
+          { error: "No hay una solicitud PDF pendiente para este técnico." },
+          { status: 409 },
+        )
+      }
+    }
 
     const instanteGeneracion = new Date()
     const generadoEn = fechaHoraArgentina(instanteGeneracion)
@@ -332,11 +360,18 @@ export async function GET(
       matriculado.fecha_vencimiento,
     )
 
+    const categoriaTecnica = ["base", "inverter", "superior"].includes(
+      String(matriculado.categoria_tecnica || "base").toLowerCase(),
+    )
+      ? String(matriculado.categoria_tecnica || "base").toLowerCase()
+      : "base"
+
     const payloadFirma = [
       `id=${matriculado.id}`,
       `matricula=${matriculado.numero_matricula}`,
       `nombre=${matriculado.apellido_nombre}`,
       `estado=${estadoEfectivo}`,
+      `categoria=${categoriaTecnica}`,
       `emision=${fechaEmisionCredencial || ""}`,
       `vencimiento=${matriculado.fecha_vencimiento || ""}`,
       `codigo_qr=${codigo}`,
@@ -392,7 +427,25 @@ export async function GET(
       StandardFonts.HelveticaBold,
     )
 
-    const azul = rgb(0.07, 0.12, 0.31)
+    const azulBase = rgb(0.07, 0.12, 0.31)
+    const verdeInverter = rgb(0.05, 0.34, 0.18)
+    const doradoSuperior = rgb(0.58, 0.40, 0.06)
+
+    const colorCategoria =
+      categoriaTecnica === "inverter"
+        ? verdeInverter
+        : categoriaTecnica === "superior"
+          ? doradoSuperior
+          : azulBase
+
+    const nombreCategoria =
+      categoriaTecnica === "inverter"
+        ? "INVERTER"
+        : categoriaTecnica === "superior"
+          ? "SUPERIOR"
+          : "BASE"
+
+    const azul = colorCategoria
     const gris = rgb(0.34, 0.38, 0.45)
     const grisClaro = rgb(0.95, 0.96, 0.98)
     const negro = rgb(0.05, 0.07, 0.1)
@@ -446,10 +499,10 @@ export async function GET(
       },
     )
 
-    page.drawText("CREDENCIAL", {
-      x: anchoPagina - 47,
+    page.drawText(`CREDENCIAL · ${nombreCategoria}`, {
+      x: anchoPagina - 73,
       y: altoPagina - 15.2,
-      size: 6,
+      size: 5.5,
       font: fontBold,
       color: blanco,
     })
@@ -615,6 +668,14 @@ export async function GET(
       color: azul,
     })
 
+    page.drawText(`CAT. ${nombreCategoria}`, {
+      x: datosX,
+      y: yMatricula - 18,
+      size: 4.8,
+      font: fontBold,
+      color: azul,
+    })
+
     const estadoTexto = estadoEfectivo.toUpperCase()
 
     const estadoColor =
@@ -658,7 +719,7 @@ export async function GET(
 
     page.drawText("ESPECIALIDAD", {
       x: datosX,
-      y: 50,
+      y: 45,
       size: 4.8,
       font: fontBold,
       color: gris,
@@ -672,7 +733,7 @@ export async function GET(
       2,
     )
 
-    let especialidadY = 42
+    let especialidadY = 37
 
     for (const linea of especialidadLineas) {
       page.drawText(linea, {
@@ -831,6 +892,67 @@ export async function GET(
       /[^A-Za-z0-9_-]/g,
       "_",
     )
+
+    if (guardarSolicitud) {
+      const pdfPath = `${matriculado.id}/${codigoDocumento}.pdf`
+
+      const { error: errorUpload } = await supabase.storage
+        .from("credenciales-pdf")
+        .upload(pdfPath, Buffer.from(pdfBytes), {
+          contentType: "application/pdf",
+          cacheControl: "0",
+          upsert: false,
+        })
+
+      if (errorUpload) {
+        console.error("Error guardando PDF solicitado:", errorUpload)
+
+        return NextResponse.json(
+          { error: "El PDF fue generado, pero no se pudo guardar para el técnico." },
+          { status: 500 },
+        )
+      }
+
+      const aprobadoEn = new Date().toISOString()
+
+      const { data: solicitudActualizada, error: errorSolicitud } =
+        await supabase
+          .from("solicitudes_credencial_pdf")
+          .update({
+            estado: "disponible",
+            categoria_tecnica: categoriaTecnica,
+            pdf_path: pdfPath,
+            codigo_documento: codigoDocumento,
+            aprobado_en: aprobadoEn,
+            entregado_en: null,
+          })
+          .eq("matriculado_id", matriculado.id)
+          .eq("estado", "solicitada")
+          .select("matriculado_id")
+          .maybeSingle()
+
+      if (errorSolicitud || !solicitudActualizada) {
+        console.error(
+          "Error actualizando solicitud PDF:",
+          errorSolicitud,
+        )
+
+        await supabase.storage
+          .from("credenciales-pdf")
+          .remove([pdfPath])
+
+        return NextResponse.json(
+          { error: "No se pudo aprobar la solicitud PDF." },
+          { status: 500 },
+        )
+      }
+
+      return NextResponse.json({
+        ok: true,
+        mensaje: "PDF aprobado y disponible para el técnico.",
+        codigoDocumento,
+      })
+    }
 
     return new NextResponse(
       Buffer.from(pdfBytes),
