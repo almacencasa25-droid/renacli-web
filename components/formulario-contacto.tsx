@@ -3,46 +3,80 @@
 import { useState } from "react"
 import { Mail, Send } from "lucide-react"
 
-type EstadoEnvio = "idle" | "enviando" | "ok" | "error"
+type EstadoEnvio =
+  | "idle"
+  | "enviando"
+  | "ok"
+  | "error"
 
 export function FormularioContacto() {
-  const [estado, setEstado] = useState<EstadoEnvio>("idle")
-  const [mensajeEstado, setMensajeEstado] = useState("")
+  const [estado, setEstado] =
+    useState<EstadoEnvio>("idle")
 
-  async function enviarFormulario(event: React.FormEvent<HTMLFormElement>) {
+  const [
+    mensajeEstado,
+    setMensajeEstado,
+  ] = useState("")
+
+  const [
+    numeroTramite,
+    setNumeroTramite,
+  ] = useState("")
+
+  async function enviarFormulario(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
 
-    const formulario = event.currentTarget
-    const datos = new FormData(formulario)
+    const formulario =
+      event.currentTarget
+
+    const datos =
+      new FormData(formulario)
 
     setEstado("enviando")
     setMensajeEstado("")
+    setNumeroTramite("")
 
     try {
-      const respuesta = await fetch("/api/contacto", {
-        method: "POST",
-        body: datos,
-      })
+      const respuesta =
+        await fetch(
+          "/api/contacto",
+          {
+            method: "POST",
+            body: datos,
+          },
+        )
 
-      const resultado = await respuesta.json()
+      const resultado =
+        await respuesta.json()
 
       if (!respuesta.ok) {
         throw new Error(
-          resultado?.error || "No se pudo enviar la consulta."
+          resultado?.error ||
+            "No se pudo enviar la consulta.",
         )
       }
 
       formulario.reset()
+
       setEstado("ok")
+
+      setNumeroTramite(
+        resultado?.numeroTramite ||
+          "",
+      )
+
       setMensajeEstado(
-        "Tu consulta fue enviada correctamente. RENACLI la recibirá para su revisión."
+        "Tu consulta fue enviada correctamente. Guardá el número de trámite para realizar el seguimiento.",
       )
     } catch (error) {
       setEstado("error")
+
       setMensajeEstado(
         error instanceof Error
           ? error.message
-          : "No se pudo enviar la consulta."
+          : "No se pudo enviar la consulta.",
       )
     }
   }
@@ -55,7 +89,11 @@ export function FormularioContacto() {
       <div className="rounded-2xl border border-border bg-card p-5 sm:p-7">
         <div className="flex items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Mail className="size-5" aria-hidden="true" strokeWidth={1.75} />
+            <Mail
+              className="size-5"
+              aria-hidden="true"
+              strokeWidth={1.75}
+            />
           </span>
 
           <div>
@@ -68,13 +106,18 @@ export function FormularioContacto() {
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Enviá tu consulta mediante este formulario. RENACLI recibirá el
-              mensaje para su revisión y seguimiento.
+              Enviá tu consulta mediante este
+              formulario. RENACLI recibirá el
+              mensaje para su revisión y
+              seguimiento.
             </p>
           </div>
         </div>
 
-        <form onSubmit={enviarFormulario} className="mt-6 space-y-4">
+        <form
+          onSubmit={enviarFormulario}
+          className="mt-6 space-y-4"
+        >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-sm font-semibold text-foreground">
@@ -136,16 +179,40 @@ export function FormularioContacto() {
                 defaultValue=""
                 className="w-full rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground outline-none transition focus:border-primary"
               >
-                <option value="" disabled>
+                <option
+                  value=""
+                  disabled
+                >
                   Seleccioná una opción
                 </option>
-                <option value="matricula">Matrícula RENACLI</option>
-                <option value="renovacion">Renovación</option>
-                <option value="documentacion">Documentación</option>
-                <option value="evaluacion">Evaluación</option>
-                <option value="reclamo">Reclamo o inconveniente</option>
-                <option value="instituciones">Instituciones</option>
-                <option value="otro">Otro</option>
+
+                <option value="matricula">
+                  Matrícula RENACLI
+                </option>
+
+                <option value="renovacion">
+                  Renovación
+                </option>
+
+                <option value="documentacion">
+                  Documentación
+                </option>
+
+                <option value="evaluacion">
+                  Evaluación
+                </option>
+
+                <option value="reclamo">
+                  Reclamo o inconveniente
+                </option>
+
+                <option value="instituciones">
+                  Instituciones
+                </option>
+
+                <option value="otro">
+                  Otro
+                </option>
               </select>
             </label>
           </div>
@@ -169,32 +236,63 @@ export function FormularioContacto() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="submit"
-              disabled={estado === "enviando"}
+              disabled={
+                estado ===
+                "enviando"
+              }
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Send className="size-4" aria-hidden="true" />
+              <Send
+                className="size-4"
+                aria-hidden="true"
+              />
 
-              {estado === "enviando" ? "Enviando..." : "Enviar consulta"}
+              {estado ===
+              "enviando"
+                ? "Enviando..."
+                : "Enviar consulta"}
             </button>
 
-            {mensajeEstado && (
-              <p
-                className={`text-sm ${
-                  estado === "ok"
-                    ? "text-green-700"
-                    : estado === "error"
-                      ? "text-red-700"
-                      : "text-muted-foreground"
-                }`}
-              >
+            {mensajeEstado &&
+            estado !== "ok" ? (
+              <p className="text-sm text-red-700">
                 {mensajeEstado}
               </p>
-            )}
+            ) : null}
           </div>
 
+          {estado === "ok" ? (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+              <p className="text-sm font-semibold text-green-800">
+                {mensajeEstado}
+              </p>
+
+              {numeroTramite ? (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-800">
+                    Número de trámite
+                  </p>
+
+                  <p className="mt-1 break-all text-xl font-black text-green-950">
+                    {numeroTramite}
+                  </p>
+
+                  <p className="mt-2 text-xs leading-relaxed text-green-800">
+                    Guardalo. Lo vas a
+                    necesitar para consultar
+                    el estado del trámite y
+                    continuar el seguimiento.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Los datos ingresados serán utilizados únicamente para gestionar y
-            responder la consulta enviada a RENACLI.
+            Los datos ingresados serán
+            utilizados únicamente para
+            gestionar y responder la consulta
+            enviada a RENACLI.
           </p>
         </form>
       </div>
