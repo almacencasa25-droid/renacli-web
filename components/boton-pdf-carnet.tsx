@@ -81,8 +81,7 @@ export function BotonPdfCarnet({
         throw new Error(mensaje)
       }
 
-      const blob =
-        await respuesta.blob()
+      const blob = await respuesta.blob()
 
       const url =
         URL.createObjectURL(blob)
@@ -108,9 +107,7 @@ export function BotonPdfCarnet({
     <div className="flex flex-wrap items-center justify-end gap-2">
       {codigoPdfVigente ? (
         <a
-          href={`/verificar-documento/${encodeURIComponent(
-            codigoPdfVigente,
-          )}`}
+          href={`/api/carnet-pdf/${matriculadoId}/vigente`}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-lg border border-blue-950 bg-white px-4 py-2 text-sm font-bold text-blue-950 transition hover:bg-blue-50"
