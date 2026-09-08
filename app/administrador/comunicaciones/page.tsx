@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@supabase/supabase-js"
 import BotonCerrarTramite from "./BotonCerrarTramite"
+import AutoActualizarComunicaciones from "./AutoActualizarComunicaciones"
 
 const COOKIE_NAME = "renacli_admin_session"
 
@@ -1162,6 +1163,8 @@ export default async function ComunicacionesPage({
         fontFamily: "Arial, sans-serif",
       }}
     >
+      <AutoActualizarComunicaciones />
+
       <header
         style={{
           background: "#0d4f7c",
