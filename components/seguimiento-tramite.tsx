@@ -389,7 +389,42 @@ export function SeguimientoTramite() {
   }
 
   useEffect(() => {
-    void cargarSesion(true)
+    let activo = true
+
+    async function prepararAccesoSeguro() {
+      try {
+        await fetch(
+          "/api/tramite",
+          {
+            method: "DELETE",
+            cache: "no-store",
+          },
+        )
+      } finally {
+        if (!activo) {
+          return
+        }
+
+        setAutenticado(false)
+        setTramite(null)
+        setMensajes([])
+        setDocumentos([])
+        setCerrado(false)
+        setNumeroTramite("")
+        setEmail("")
+        setTextoMensaje("")
+        setArchivos([])
+        setAviso("")
+        setError("")
+        setCargando(false)
+      }
+    }
+
+    void prepararAccesoSeguro()
+
+    return () => {
+      activo = false
+    }
   }, [])
 
   useEffect(() => {
