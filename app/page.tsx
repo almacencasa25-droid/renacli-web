@@ -16,6 +16,7 @@ import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { Verificador } from "@/components/verificador"
 import { FormularioContacto } from "@/components/formulario-contacto"
+import { WhatsAppFlotante } from "@/components/whatsapp-flotante"
 
 const INFORMACION = [
   {
@@ -402,6 +403,7 @@ export default function Home() {
       </main>
 
       <SiteFooter />
+      <WhatsAppFlotante />
     </div>
   )
 }
