@@ -470,7 +470,7 @@ async function enviarMensajeAdministrador(formData: FormData) {
   revalidatePath("/administrador/comunicaciones")
 
   redirect(
-    `/administrador/comunicaciones?tab=notificaciones&mensaje=chat_enviado&tramite=${id}#tramite-${id}`
+    `/administrador/comunicaciones?tab=notificaciones&mensaje=chat_enviado&tramite=${id}#respuesta-${id}`
   )
 }
 
@@ -2076,7 +2076,7 @@ function ConsultaCard({
             listStylePosition: "inside",
           }}
         >
-          Abrir conversación
+          Conversación
         </summary>
 
         <div
@@ -2249,10 +2249,12 @@ function ConsultaCard({
 
           {!cerrado ? (
             <div
+              id={`respuesta-${consulta.id}`}
               style={{
                 padding: "15px",
                 borderTop: "1px solid #e2e8f0",
                 background: "#ffffff",
+                scrollMarginTop: "18px",
               }}
             >
               <form
@@ -2281,17 +2283,49 @@ function ConsultaCard({
                     flexWrap: "wrap",
                   }}
                 >
-                  <input
-                    type="file"
-                    name="documentos"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  <label
                     style={{
-                      maxWidth: "100%",
-                      color: "#475569",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "7px",
+                      padding: "10px 13px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontWeight: "bold",
+                      cursor: "pointer",
                       fontSize: "13px",
                     }}
-                  />
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        fontSize: "18px",
+                        lineHeight: 1,
+                      }}
+                    >
+                      📎
+                    </span>
+                    Adjuntar documentación
+                    <input
+                      type="file"
+                      name="documentos"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                      style={{
+                        position: "absolute",
+                        width: "1px",
+                        height: "1px",
+                        padding: 0,
+                        margin: "-1px",
+                        overflow: "hidden",
+                        clip: "rect(0, 0, 0, 0)",
+                        whiteSpace: "nowrap",
+                        border: 0,
+                      }}
+                    />
+                  </label>
 
                   <button type="submit" style={botonAzul}>
                     Enviar mensaje
@@ -2305,56 +2339,11 @@ function ConsultaCard({
                     fontSize: "12px",
                   }}
                 >
-                  El mensaje se guarda y queda visible inmediatamente.
-                  Archivos: PDF, JPG, JPEG o PNG, hasta 10 MB cada uno.
+                  Escribí el mensaje y, si hace falta, adjuntá la documentación
+                  desde el ganchito. Al enviar, todo queda guardado en este mismo chat.
                 </p>
               </form>
 
-              <details
-                style={{
-                  marginTop: "14px",
-                  borderTop: "1px solid #e2e8f0",
-                  paddingTop: "12px",
-                }}
-              >
-                <summary
-                  style={{
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                    color: "#92400e",
-                  }}
-                >
-                  Pedir documentación
-                </summary>
-
-                <form
-                  action={pedirDocumentacionAdministrador}
-                  style={{ marginTop: "10px" }}
-                >
-                  <input type="hidden" name="id" value={consulta.id} />
-
-                  <textarea
-                    name="mensaje_documentacion"
-                    rows={2}
-                    required
-                    maxLength={3000}
-                    placeholder="Indicá exactamente qué documentación falta."
-                    style={campoTexto}
-                  />
-
-                  <button
-                    type="submit"
-                    style={{
-                      ...botonBlanco,
-                      marginTop: "9px",
-                      borderColor: "#f59e0b",
-                      color: "#92400e",
-                    }}
-                  >
-                    Enviar pedido de documentación
-                  </button>
-                </form>
-              </details>
 
               <form
                 action={cerrarTramiteAdministrador}
