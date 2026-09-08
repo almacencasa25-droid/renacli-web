@@ -1121,11 +1121,6 @@ export default async function ComunicacionesPage({
       return fechaB - fechaA
     })
 
-  const esperandoDocumentacion = abiertos.filter(
-    item =>
-      item.esperando_documentacion ||
-      item.estado === "falta_documentacion"
-  )
 
   const cerrados = consultas
     .filter(item => Boolean(item.cerrado_en))
@@ -1262,7 +1257,7 @@ export default async function ComunicacionesPage({
         {parametros.mensaje === "tramite_cerrado" && (
           <Aviso
             tipo="ok"
-            texto="Caso cerrado correctamente."
+            texto="Trámite terminado y archivado correctamente."
           />
         )}
         {parametros.mensaje === "calificacion_anulada" && (
@@ -1664,37 +1659,15 @@ export default async function ComunicacionesPage({
               )}
             </section>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: "12px",
-                marginBottom: "22px",
-              }}
-            >
-              <Resumen
-                numero={abiertos.length}
-                texto="Conversaciones abiertas"
-              />
-              <Resumen
-                numero={esperandoDocumentacion.length}
-                texto="Esperando documentación"
-              />
-              <Resumen
-                numero={cerrados.length}
-                texto="Casos cerrados"
-              />
-            </div>
-
-            <h3 style={tituloSeccion}>Conversaciones abiertas</h3>
+            <h3 style={tituloSeccion}>Trámites pendientes</h3>
             <p style={textoAyuda}>
-              Abrí el caso, revisá el hilo y respondé desde el mismo chat.
-              Los estados se administran automáticamente para reducir pasos.
+              Acá quedan solamente los trámites que todavía requieren atención.
+              Abrí el chat, respondé y, cuando esté completamente terminado,
+              usá el botón “Trámite terminado” para archivarlo.
             </p>
 
             {abiertos.length === 0 ? (
-              <Vacio texto="No hay conversaciones abiertas." />
+              <Vacio texto="No hay trámites pendientes." />
             ) : (
               abiertos.map(consulta => (
                 <ConsultaCard
@@ -1724,7 +1697,7 @@ export default async function ComunicacionesPage({
                   listStylePosition: "inside",
                 }}
               >
-                Casos cerrados ({cerrados.length})
+                Trámites terminados / archivados ({cerrados.length})
               </summary>
 
               <div
@@ -1736,7 +1709,7 @@ export default async function ComunicacionesPage({
               >
                 {cerrados.length === 0 ? (
                   <p style={textoAyuda}>
-                    Todavía no hay casos cerrados.
+                    Todavía no hay trámites terminados.
                   </p>
                 ) : (
                   cerrados.map(consulta => (
@@ -2065,13 +2038,6 @@ function ConsultaCard({
           </p>
         </div>
 
-        <EstadoConsulta
-          estado={
-            cerrado
-              ? "respondida"
-              : consulta.estado
-          }
-        />
       </div>
 
       <details
@@ -2391,7 +2357,7 @@ function ConsultaCard({
                     background: "#475569",
                   }}
                 >
-                  Cerrar caso
+                  Trámite terminado
                 </button>
 
                 <p
@@ -2401,26 +2367,13 @@ function ConsultaCard({
                     fontSize: "12px",
                   }}
                 >
-                  Usalo cuando la respuesta final ya fue enviada.
-                  El chat quedará disponible para consulta, pero ya no admitirá
-                  nuevos mensajes.
+                  Usalo únicamente cuando ya terminaste la gestión.
+                  El trámite saldrá de pendientes y pasará automáticamente
+                  al archivo de trámites terminados.
                 </p>
               </form>
             </div>
-          ) : (
-            <div
-              style={{
-                padding: "14px 16px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#f0fdf4",
-                color: "#166534",
-                fontWeight: "bold",
-                fontSize: "13px",
-              }}
-            >
-              Caso cerrado. La conversación queda guardada para consulta.
-            </div>
-          )}
+          ) : null}
         </div>
       </details>
 
