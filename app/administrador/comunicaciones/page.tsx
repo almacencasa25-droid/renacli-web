@@ -267,12 +267,7 @@ async function enviarMensajeAdministrador(formData: FormData) {
     )
   }
 
-  if (
-    consulta.cerrado_en ||
-    ["respondida", "aprobado", "rechazado", "archivada"].includes(
-      consulta.estado
-    )
-  ) {
+  if (consulta.cerrado_en) {
     redirect(
       "/administrador/comunicaciones?tab=notificaciones&error=cerrado#notificaciones"
     )
@@ -1115,13 +1110,7 @@ export default async function ComunicacionesPage({
   }
 
   const abiertos = consultas
-    .filter(
-      item =>
-        !item.cerrado_en &&
-        !["respondida", "aprobado", "rechazado", "archivada"].includes(
-          item.estado
-        )
-    )
+    .filter(item => !item.cerrado_en)
     .sort((a, b) => {
       const fechaA = new Date(
         a.ultimo_mensaje_en || a.updated_at || a.created_at
@@ -1139,13 +1128,7 @@ export default async function ComunicacionesPage({
   )
 
   const cerrados = consultas
-    .filter(
-      item =>
-        Boolean(item.cerrado_en) ||
-        ["respondida", "aprobado", "rechazado", "archivada"].includes(
-          item.estado
-        )
-    )
+    .filter(item => Boolean(item.cerrado_en))
     .sort((a, b) => {
       const fechaA = new Date(
         a.cerrado_en || a.updated_at || a.created_at
@@ -1954,11 +1937,7 @@ function ConsultaCard({
   documentos: DocumentoTramite[]
   historial: HistorialTramite[]
 }) {
-  const cerrado =
-    Boolean(consulta.cerrado_en) ||
-    ["respondida", "aprobado", "rechazado", "archivada"].includes(
-      consulta.estado
-    )
+  const cerrado = Boolean(consulta.cerrado_en)
 
   const elementosChat: Array<
     | {
