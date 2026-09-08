@@ -1,3 +1,4 @@
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
@@ -7,8 +8,44 @@ const supabaseUrl =
 const supabaseSecretKey =
   process.env.SUPABASE_SECRET_KEY
 
+const COOKIE_NAME =
+  "renacli_admin_session"
+
 const BUCKET =
   "documentos-tramites"
+
+function obtenerTokenAdministrador() {
+  const password =
+    process.env.RENACLI_ADMIN_PASSWORD
+
+  if (!password) {
+    return null
+  }
+
+  return crypto
+    .createHash("sha256")
+    .update(password)
+    .digest("hex")
+}
+
+function administradorAutorizado(
+  request: NextRequest,
+) {
+  const tokenGuardado =
+    request.cookies.get(
+      COOKIE_NAME,
+    )?.value
+
+  const tokenCorrecto =
+    obtenerTokenAdministrador()
+
+  return Boolean(
+    tokenCorrecto &&
+      tokenGuardado &&
+      tokenGuardado ===
+        tokenCorrecto,
+  )
+}
 
 function crearSupabase() {
   if (
@@ -44,10 +81,9 @@ function nombreSeguro(
 export async function GET(
   request: NextRequest,
   context: {
-    params:
-      Promise<{
-        id: string
-      }>
+    params: Promise<{
+      id: string
+    }>
   },
 ) {
   try {
@@ -66,12 +102,11 @@ export async function GET(
       )
     }
 
-    const sesionAdmin =
-      request.cookies.get(
-        "renacli_admin_session",
-      )?.value
-
-    if (!sesionAdmin) {
+    if (
+      !administradorAutorizado(
+        request,
+      )
+    ) {
       return NextResponse.json(
         {
           error:
@@ -156,7 +191,7 @@ export async function GET(
     ) {
       if (errorDocumento) {
         console.error(
-          "Error buscando documento de trámite:",
+          "[RENACLI] Error buscando documento de trámite:",
           errorDocumento,
         )
       }
@@ -195,7 +230,7 @@ export async function GET(
     ) {
       if (errorConsulta) {
         console.error(
-          "Error verificando consulta del documento:",
+          "[RENACLI] Error verificando consulta del documento:",
           errorConsulta,
         )
       }
@@ -227,7 +262,7 @@ export async function GET(
     ) {
       if (errorDescarga) {
         console.error(
-          "Error descargando documento del trámite:",
+          "[RENACLI] Error descargando documento del trámite:",
           errorDescarga,
         )
       }
@@ -259,18 +294,24 @@ export async function GET(
           "Content-Type":
             documento.mime_type ||
             "application/octet-stream",
+
           "Content-Disposition":
             `inline; filename="${nombre}"`,
+
           "Cache-Control":
             "private, no-store, max-age=0",
+
           Pragma:
             "no-cache",
+
+          "X-Content-Type-Options":
+            "nosniff",
         },
       },
     )
   } catch (error) {
     console.error(
-      "Error abriendo documento desde administrador:",
+      "[RENACLI] Error abriendo documento desde administrador:",
       error,
     )
 
