@@ -9,11 +9,16 @@ const COOKIE_NAME = "renacli_admin_session"
 type EstadoConsulta =
   | "pendiente"
   | "en_seguimiento"
+  | "en_revision"
+  | "falta_documentacion"
   | "respondida"
+  | "aprobado"
+  | "rechazado"
   | "archivada"
 
 type ConsultaContacto = {
   id: number
+  numero_tramite: string | null
   nombre: string
   email: string
   telefono: string | null
@@ -21,8 +26,38 @@ type ConsultaContacto = {
   mensaje: string
   estado: EstadoConsulta
   respuesta_interna: string | null
+  respuesta_publica: string | null
+  detalle_documentacion_faltante: string | null
+  requiere_documentacion: boolean
+  fecha_en_revision: string | null
+  fecha_ultima_respuesta: string | null
+  fecha_aprobacion: string | null
+  fecha_rechazo: string | null
   created_at: string
   updated_at: string
+}
+
+type DocumentoTramite = {
+  id: number
+  consulta_id: number
+  nombre_original: string
+  mime_type: string
+  tamano_bytes: number
+  origen: "solicitante" | "administracion"
+  descripcion: string | null
+  activo: boolean
+  created_at: string
+}
+
+type HistorialTramite = {
+  id: number
+  consulta_id: number
+  tipo_evento: string
+  estado_anterior: string | null
+  estado_nuevo: string | null
+  descripcion: string | null
+  origen: "solicitante" | "administracion" | "sistema"
+  created_at: string
 }
 
 type CalificacionTecnico = {
@@ -143,7 +178,11 @@ function etiquetaMotivo(motivo: string) {
 
 function etiquetaEstadoConsulta(estado: EstadoConsulta) {
   if (estado === "en_seguimiento") return "En seguimiento"
+  if (estado === "en_revision") return "En revisión"
+  if (estado === "falta_documentacion") return "Falta documentación"
   if (estado === "respondida") return "Respondida"
+  if (estado === "aprobado") return "Aprobado"
+  if (estado === "rechazado") return "Rechazado"
   if (estado === "archivada") return "Archivada"
   return "Pendiente"
 }
@@ -156,11 +195,15 @@ async function cambiarEstadoConsulta(formData: FormData) {
   }
 
   const id = Number(formData.get("id") ?? 0)
-  const estado = String(formData.get("estado") ?? "")
-  const estadosPermitidos = [
+  const estado = String(formData.get("estado") ?? "") as EstadoConsulta
+  const estadosPermitidos: EstadoConsulta[] = [
     "pendiente",
     "en_seguimiento",
+    "en_revision",
+    "falta_documentacion",
     "respondida",
+    "aprobado",
+    "rechazado",
     "archivada",
   ]
 
@@ -175,13 +218,47 @@ async function cambiarEstadoConsulta(formData: FormData) {
   }
 
   const supabase = obtenerSupabaseAdmin()
+  const { data: consultaActual, error: errorLectura } = await supabase
+    .from("consultas_contacto")
+    .select("id, estado")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (errorLectura || !consultaActual) {
+    console.error(
+      "[RENACLI] Error leyendo consulta antes de cambiar estado:",
+      errorLectura
+    )
+    redirect(
+      "/administrador/comunicaciones?tab=notificaciones&error=consulta"
+    )
+  }
+
+  const ahora = new Date().toISOString()
+  const cambios: Record<string, string | boolean | null> = {
+    estado,
+    updated_at: ahora,
+  }
+
+  if (estado === "en_revision") {
+    cambios.fecha_en_revision = ahora
+  }
+
+  if (estado === "falta_documentacion") {
+    cambios.requiere_documentacion = true
+  }
+
+  if (estado === "aprobado") {
+    cambios.fecha_aprobacion = ahora
+  }
+
+  if (estado === "rechazado") {
+    cambios.fecha_rechazo = ahora
+  }
 
   const { error } = await supabase
     .from("consultas_contacto")
-    .update({
-      estado,
-      updated_at: new Date().toISOString(),
-    })
+    .update(cambios)
     .eq("id", id)
 
   if (error) {
@@ -194,12 +271,30 @@ async function cambiarEstadoConsulta(formData: FormData) {
     )
   }
 
+  const { error: errorHistorial } = await supabase
+    .from("historial_tramites")
+    .insert({
+      consulta_id: id,
+      tipo_evento: "cambio_estado",
+      estado_anterior: consultaActual.estado,
+      estado_nuevo: estado,
+      descripcion: `Estado actualizado a ${etiquetaEstadoConsulta(estado)}.`,
+      origen: "administracion",
+    })
+
+  if (errorHistorial) {
+    console.error(
+      "[RENACLI] Error registrando historial de estado:",
+      errorHistorial
+    )
+  }
+
   redirect(
     "/administrador/comunicaciones?tab=notificaciones&mensaje=consulta_actualizada#notificaciones"
   )
 }
 
-async function guardarNotaConsulta(formData: FormData) {
+async function guardarGestionConsulta(formData: FormData) {
   "use server"
 
   if (!(await estaAutorizado())) {
@@ -212,6 +307,16 @@ async function guardarNotaConsulta(formData: FormData) {
   )
     .trim()
     .slice(0, 3000)
+  const respuestaPublica = String(
+    formData.get("respuesta_publica") ?? ""
+  )
+    .trim()
+    .slice(0, 5000)
+  const detalleFaltante = String(
+    formData.get("detalle_documentacion_faltante") ?? ""
+  )
+    .trim()
+    .slice(0, 3000)
 
   if (!Number.isInteger(id) || id <= 0) {
     redirect(
@@ -220,18 +325,23 @@ async function guardarNotaConsulta(formData: FormData) {
   }
 
   const supabase = obtenerSupabaseAdmin()
+  const ahora = new Date().toISOString()
 
   const { error } = await supabase
     .from("consultas_contacto")
     .update({
       respuesta_interna: respuestaInterna || null,
-      updated_at: new Date().toISOString(),
+      respuesta_publica: respuestaPublica || null,
+      detalle_documentacion_faltante: detalleFaltante || null,
+      fecha_ultima_respuesta: respuestaPublica ? ahora : null,
+      requiere_documentacion: detalleFaltante ? true : undefined,
+      updated_at: ahora,
     })
     .eq("id", id)
 
   if (error) {
     console.error(
-      "[RENACLI] Error guardando nota de consulta:",
+      "[RENACLI] Error guardando gestión de consulta:",
       error
     )
     redirect(
@@ -239,8 +349,30 @@ async function guardarNotaConsulta(formData: FormData) {
     )
   }
 
+  const descripcion = respuestaPublica
+    ? "RENACLI registró una respuesta pública para el trámite."
+    : detalleFaltante
+      ? "RENACLI indicó documentación faltante para el trámite."
+      : "RENACLI actualizó la gestión interna del trámite."
+
+  const { error: errorHistorial } = await supabase
+    .from("historial_tramites")
+    .insert({
+      consulta_id: id,
+      tipo_evento: respuestaPublica ? "respuesta" : "actualizacion",
+      descripcion,
+      origen: "administracion",
+    })
+
+  if (errorHistorial) {
+    console.error(
+      "[RENACLI] Error registrando historial de gestión:",
+      errorHistorial
+    )
+  }
+
   redirect(
-    "/administrador/comunicaciones?tab=notificaciones&mensaje=nota_guardada#notificaciones"
+    "/administrador/comunicaciones?tab=notificaciones&mensaje=gestion_guardada#notificaciones"
   )
 }
 
@@ -440,10 +572,33 @@ export default async function ComunicacionesPage({
   } = await supabase
     .from("consultas_contacto")
     .select(
-      "id, nombre, email, telefono, motivo, mensaje, estado, respuesta_interna, created_at, updated_at"
+      "id, numero_tramite, nombre, email, telefono, motivo, mensaje, estado, respuesta_interna, respuesta_publica, detalle_documentacion_faltante, requiere_documentacion, fecha_en_revision, fecha_ultima_respuesta, fecha_aprobacion, fecha_rechazo, created_at, updated_at"
     )
     .order("created_at", { ascending: false })
     .limit(500)
+
+  const {
+    data: documentosTramitesData,
+    error: errorDocumentosTramites,
+  } = await supabase
+    .from("documentos_tramites")
+    .select(
+      "id, consulta_id, nombre_original, mime_type, tamano_bytes, origen, descripcion, activo, created_at"
+    )
+    .eq("activo", true)
+    .order("created_at", { ascending: false })
+    .limit(5000)
+
+  const {
+    data: historialTramitesData,
+    error: errorHistorialTramites,
+  } = await supabase
+    .from("historial_tramites")
+    .select(
+      "id, consulta_id, tipo_evento, estado_anterior, estado_nuevo, descripcion, origen, created_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(5000)
 
   const {
     data: calificacionesData,
@@ -474,6 +629,20 @@ export default async function ComunicacionesPage({
     )
   }
 
+  if (errorDocumentosTramites) {
+    console.error(
+      "[RENACLI] Error obteniendo documentos de trámites:",
+      errorDocumentosTramites
+    )
+  }
+
+  if (errorHistorialTramites) {
+    console.error(
+      "[RENACLI] Error obteniendo historial de trámites:",
+      errorHistorialTramites
+    )
+  }
+
   if (errorCalificaciones) {
     console.error(
       "[RENACLI] Error obteniendo calificaciones:",
@@ -489,6 +658,10 @@ export default async function ComunicacionesPage({
   }
 
   const consultas = (consultasData ?? []) as ConsultaContacto[]
+  const documentosTramites =
+    (documentosTramitesData ?? []) as DocumentoTramite[]
+  const historialTramites =
+    (historialTramitesData ?? []) as HistorialTramite[]
   const calificaciones =
     (calificacionesData ?? []) as CalificacionTecnico[]
   const solicitudesPdf =
@@ -600,15 +773,34 @@ export default async function ComunicacionesPage({
       })
     )
 
+  const documentosPorConsulta = new Map<number, DocumentoTramite[]>()
+  for (const documento of documentosTramites) {
+    const actuales = documentosPorConsulta.get(documento.consulta_id) ?? []
+    actuales.push(documento)
+    documentosPorConsulta.set(documento.consulta_id, actuales)
+  }
+
+  const historialPorConsulta = new Map<number, HistorialTramite[]>()
+  for (const evento of historialTramites) {
+    const actuales = historialPorConsulta.get(evento.consulta_id) ?? []
+    actuales.push(evento)
+    historialPorConsulta.set(evento.consulta_id, actuales)
+  }
+
   const pendientes = consultas.filter(
     item => item.estado === "pendiente"
   )
   const seguimiento = consultas.filter(
-    item => item.estado === "en_seguimiento"
+    item =>
+      item.estado === "en_seguimiento" ||
+      item.estado === "en_revision" ||
+      item.estado === "falta_documentacion"
   )
   const historial = consultas.filter(
     item =>
       item.estado === "respondida" ||
+      item.estado === "aprobado" ||
+      item.estado === "rechazado" ||
       item.estado === "archivada"
   )
 
@@ -714,10 +906,10 @@ export default async function ComunicacionesPage({
             texto="Estado de la notificación actualizado correctamente."
           />
         )}
-        {parametros.mensaje === "nota_guardada" && (
+        {parametros.mensaje === "gestion_guardada" && (
           <Aviso
             tipo="ok"
-            texto="Nota interna guardada correctamente."
+            texto="Gestión del trámite guardada correctamente."
           />
         )}
         {parametros.mensaje === "calificacion_anulada" && (
@@ -1108,7 +1300,7 @@ export default async function ComunicacionesPage({
               />
               <Resumen
                 numero={historial.length}
-                texto="Respondidas / archivadas"
+                texto="Finalizadas"
               />
             </div>
 
@@ -1125,6 +1317,8 @@ export default async function ComunicacionesPage({
                 <ConsultaCard
                   key={consulta.id}
                   consulta={consulta}
+                  documentos={documentosPorConsulta.get(consulta.id) ?? []}
+                  historial={historialPorConsulta.get(consulta.id) ?? []}
                 />
               ))
             )}
@@ -1149,6 +1343,8 @@ export default async function ComunicacionesPage({
                 <ConsultaCard
                   key={consulta.id}
                   consulta={consulta}
+                  documentos={documentosPorConsulta.get(consulta.id) ?? []}
+                  historial={historialPorConsulta.get(consulta.id) ?? []}
                 />
               ))
             )}
@@ -1170,7 +1366,7 @@ export default async function ComunicacionesPage({
                   listStylePosition: "inside",
                 }}
               >
-                Historial de respondidas y archivadas (
+                Historial de trámites finalizados (
                 {historial.length})
               </summary>
 
@@ -1183,13 +1379,15 @@ export default async function ComunicacionesPage({
               >
                 {historial.length === 0 ? (
                   <p style={textoAyuda}>
-                    Todavía no hay notificaciones cerradas.
+                    Todavía no hay trámites finalizados.
                   </p>
                 ) : (
                   historial.map(consulta => (
                     <ConsultaCard
                       key={consulta.id}
                       consulta={consulta}
+                      documentos={documentosPorConsulta.get(consulta.id) ?? []}
+                      historial={historialPorConsulta.get(consulta.id) ?? []}
                     />
                   ))
                 )}
@@ -1372,8 +1570,12 @@ function SolicitudPdfCard({
 
 function ConsultaCard({
   consulta,
+  documentos,
+  historial,
 }: {
   consulta: ConsultaContacto
+  documentos: DocumentoTramite[]
+  historial: HistorialTramite[]
 }) {
   return (
     <article
@@ -1392,6 +1594,18 @@ function ConsultaCard({
         }}
       >
         <div>
+          <p
+            style={{
+              margin: "0 0 5px",
+              color: "#0d5689",
+              fontSize: "12px",
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: "0.7px",
+            }}
+          >
+            {consulta.numero_tramite || "Consulta anterior sin número de trámite"}
+          </p>
           <h4
             style={{
               margin: "0 0 5px",
@@ -1418,20 +1632,14 @@ function ConsultaCard({
         style={{
           marginTop: "16px",
           display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(200px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
           gap: "12px",
         }}
       >
         <Dato etiqueta="Correo" valor={consulta.email} />
-        <Dato
-          etiqueta="Teléfono"
-          valor={consulta.telefono || "-"}
-        />
-        <Dato
-          etiqueta="Motivo"
-          valor={etiquetaMotivo(consulta.motivo)}
-        />
+        <Dato etiqueta="Teléfono" valor={consulta.telefono || "-"} />
+        <Dato etiqueta="Motivo" valor={etiquetaMotivo(consulta.motivo)} />
+        <Dato etiqueta="Documentos" valor={String(documentos.length)} />
       </div>
 
       <div style={cajaTexto}>
@@ -1439,35 +1647,86 @@ function ConsultaCard({
         <p style={parrafoCaja}>{consulta.mensaje}</p>
       </div>
 
-      <form
-        action={guardarNotaConsulta}
-        style={{ marginTop: "16px" }}
-      >
+      {documentos.length > 0 && (
+        <div style={{ ...cajaTexto, background: "#f8fbfd" }}>
+          <strong style={etiquetaCaja}>Documentación cargada</strong>
+          <div style={{ display: "grid", gap: "8px" }}>
+            {documentos.map(documento => (
+              <a
+                key={documento.id}
+                href={`/api/administrador/tramites/documentos/${documento.id}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  background: "white",
+                  border: "1px solid #dbe4ec",
+                  borderRadius: "8px",
+                  color: "#0d5689",
+                  textDecoration: "none",
+                  fontWeight: "bold",
+                }}
+              >
+                <span style={{ overflowWrap: "anywhere" }}>
+                  {documento.nombre_original}
+                </span>
+                <span style={{ whiteSpace: "nowrap", fontSize: "12px" }}>
+                  Abrir
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <form action={guardarGestionConsulta} style={{ marginTop: "16px" }}>
         <input type="hidden" name="id" value={consulta.id} />
-        <label
-          style={{
-            display: "block",
-            fontWeight: "bold",
-            color: "#334155",
-          }}
-        >
+
+        <label style={etiquetaFormulario}>
+          Respuesta visible para el solicitante
+          <textarea
+            name="respuesta_publica"
+            rows={3}
+            defaultValue={consulta.respuesta_publica ?? ""}
+            placeholder="Esta respuesta se verá cuando la persona consulte su trámite."
+            style={campoTexto}
+          />
+        </label>
+
+        <label style={{ ...etiquetaFormulario, marginTop: "12px" }}>
+          Documentación faltante
+          <textarea
+            name="detalle_documentacion_faltante"
+            rows={2}
+            defaultValue={consulta.detalle_documentacion_faltante ?? ""}
+            placeholder="Ej.: falta DNI frente y dorso, certificado o fotografía."
+            style={campoTexto}
+          />
+        </label>
+
+        <label style={{ ...etiquetaFormulario, marginTop: "12px" }}>
           Nota interna de RENACLI
           <textarea
             name="respuesta_interna"
             rows={2}
             defaultValue={consulta.respuesta_interna ?? ""}
-            placeholder="Seguimiento interno de esta consulta"
+            placeholder="Solo visible para administración."
             style={campoTexto}
           />
         </label>
+
         <button
           type="submit"
           style={{
             ...botonAzul,
-            marginTop: "9px",
+            marginTop: "10px",
           }}
         >
-          Guardar nota
+          Guardar gestión
         </button>
       </form>
 
@@ -1482,34 +1741,81 @@ function ConsultaCard({
         }}
       >
         {consulta.estado !== "pendiente" && (
-          <FormularioEstadoConsulta
-            id={consulta.id}
-            estado="pendiente"
-            texto="Pendiente"
-          />
+          <FormularioEstadoConsulta id={consulta.id} estado="pendiente" texto="Pendiente" />
         )}
         {consulta.estado !== "en_seguimiento" && (
+          <FormularioEstadoConsulta id={consulta.id} estado="en_seguimiento" texto="En seguimiento" />
+        )}
+        {consulta.estado !== "en_revision" && (
+          <FormularioEstadoConsulta id={consulta.id} estado="en_revision" texto="En revisión" />
+        )}
+        {consulta.estado !== "falta_documentacion" && (
           <FormularioEstadoConsulta
             id={consulta.id}
-            estado="en_seguimiento"
-            texto="En seguimiento"
+            estado="falta_documentacion"
+            texto="Falta documentación"
           />
         )}
         {consulta.estado !== "respondida" && (
-          <FormularioEstadoConsulta
-            id={consulta.id}
-            estado="respondida"
-            texto="Respondida"
-          />
+          <FormularioEstadoConsulta id={consulta.id} estado="respondida" texto="Respondida" />
+        )}
+        {consulta.estado !== "aprobado" && (
+          <FormularioEstadoConsulta id={consulta.id} estado="aprobado" texto="Aprobado" />
+        )}
+        {consulta.estado !== "rechazado" && (
+          <FormularioEstadoConsulta id={consulta.id} estado="rechazado" texto="Rechazado" />
         )}
         {consulta.estado !== "archivada" && (
-          <FormularioEstadoConsulta
-            id={consulta.id}
-            estado="archivada"
-            texto="Archivar"
-          />
+          <FormularioEstadoConsulta id={consulta.id} estado="archivada" texto="Archivar" />
         )}
       </div>
+
+      {historial.length > 0 && (
+        <details
+          style={{
+            marginTop: "16px",
+            borderTop: "1px solid #e2e8f0",
+            paddingTop: "14px",
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              color: "#334155",
+              fontWeight: "bold",
+            }}
+          >
+            Historial del trámite ({historial.length})
+          </summary>
+          <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+            {historial.map(evento => (
+              <div
+                key={evento.id}
+                style={{
+                  padding: "10px 12px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  background: "#f8fafc",
+                }}
+              >
+                <strong style={{ color: "#334155", fontSize: "13px" }}>
+                  {evento.estado_nuevo
+                    ? etiquetaEstadoConsulta(evento.estado_nuevo as EstadoConsulta)
+                    : evento.tipo_evento}
+                </strong>
+                {evento.descripcion ? (
+                  <p style={{ ...parrafoCaja, marginTop: "4px", fontSize: "13px" }}>
+                    {evento.descripcion}
+                  </p>
+                ) : null}
+                <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: "12px" }}>
+                  {formatearFechaHora(evento.created_at)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </article>
   )
 }
@@ -1705,28 +2011,18 @@ function EstadoConsulta({
 }) {
   const colores =
     estado === "pendiente"
-      ? {
-          fondo: "#fffbeb",
-          borde: "#fbbf24",
-          texto: "#92400e",
-        }
+      ? { fondo: "#fffbeb", borde: "#fbbf24", texto: "#92400e" }
       : estado === "en_seguimiento"
-        ? {
-            fondo: "#eff6ff",
-            borde: "#93c5fd",
-            texto: "#1d4ed8",
-          }
-        : estado === "respondida"
-          ? {
-              fondo: "#f0fdf4",
-              borde: "#86efac",
-              texto: "#166534",
-            }
-          : {
-              fondo: "#f1f5f9",
-              borde: "#cbd5e1",
-              texto: "#475569",
-            }
+        ? { fondo: "#eff6ff", borde: "#93c5fd", texto: "#1d4ed8" }
+        : estado === "en_revision"
+          ? { fondo: "#ecfeff", borde: "#67e8f9", texto: "#0e7490" }
+          : estado === "falta_documentacion"
+            ? { fondo: "#fff7ed", borde: "#fdba74", texto: "#c2410c" }
+            : estado === "respondida" || estado === "aprobado"
+              ? { fondo: "#f0fdf4", borde: "#86efac", texto: "#166534" }
+              : estado === "rechazado"
+                ? { fondo: "#fff1f2", borde: "#fda4af", texto: "#be123c" }
+                : { fondo: "#f1f5f9", borde: "#cbd5e1", texto: "#475569" }
 
   return (
     <span
@@ -1977,6 +2273,12 @@ const parrafoCaja = {
   margin: 0,
   whiteSpace: "pre-wrap" as const,
   lineHeight: 1.6,
+  color: "#334155",
+}
+
+const etiquetaFormulario = {
+  display: "block",
+  fontWeight: "bold",
   color: "#334155",
 }
 
