@@ -1,15 +1,22 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import {
   FileText,
   LogOut,
+  Paperclip,
   Search,
-  Upload,
+  Send,
 } from "lucide-react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 type Documento = {
   id: number
+  mensaje_id: number | null
   nombre_original: string
   mime_type: string
   tamano_bytes: number
@@ -18,13 +25,15 @@ type Documento = {
   created_at: string
 }
 
-type Historial = {
+type MensajeChat = {
   id: number
-  tipo_evento: string
-  estado_anterior: string | null
-  estado_nuevo: string | null
-  descripcion: string | null
-  origen: string
+  consulta_id: number
+  autor:
+    | "solicitante"
+    | "administracion"
+    | "sistema"
+  mensaje: string
+  es_mensaje_sistema: boolean
   created_at: string
 }
 
@@ -38,6 +47,10 @@ type Tramite = {
   respuesta_publica: string | null
   detalle_documentacion_faltante: string | null
   requiere_documentacion: boolean
+  esperando_documentacion: boolean
+  ultimo_mensaje_en: string | null
+  ultimo_mensaje_origen: string | null
+  cerrado_en: string | null
   created_at: string
   updated_at: string
   fecha_en_revision: string | null
@@ -49,10 +62,32 @@ type Tramite = {
 type RespuestaSesion = {
   autenticado: boolean
   tramite?: Tramite
+  mensajes?: MensajeChat[]
   documentos?: Documento[]
-  historial?: Historial[]
+  cerrado?: boolean
   error?: string
 }
+
+type ItemChat =
+  | {
+      tipo: "mensaje"
+      fecha: string
+      id: string
+      autor:
+        | "solicitante"
+        | "administracion"
+        | "sistema"
+      mensaje: string
+    }
+  | {
+      tipo: "documento"
+      fecha: string
+      id: string
+      autor:
+        | "solicitante"
+        | "administracion"
+      documento: Documento
+    }
 
 function etiquetaEstado(
   estado: string,
@@ -82,12 +117,16 @@ function etiquetaMotivo(
     string,
     string
   > = {
-    matricula: "Matrícula RENACLI",
+    matricula:
+      "Matrícula RENACLI",
     renovacion: "Renovación",
-    documentacion: "Documentación",
+    documentacion:
+      "Documentación",
     evaluacion: "Evaluación",
-    reclamo: "Reclamo o inconveniente",
-    instituciones: "Instituciones",
+    reclamo:
+      "Reclamo o inconveniente",
+    instituciones:
+      "Instituciones",
     otro: "Otro",
   }
 
@@ -102,7 +141,7 @@ function fechaArgentina(
   return new Intl.DateTimeFormat(
     "es-AR",
     {
-      dateStyle: "medium",
+      dateStyle: "short",
       timeStyle: "short",
       timeZone:
         "America/Argentina/Buenos_Aires",
@@ -129,6 +168,17 @@ function tamanoLegible(
   ).toFixed(1)} MB`
 }
 
+function autorDocumento(
+  origen: string,
+):
+  | "solicitante"
+  | "administracion" {
+  return origen ===
+    "administracion"
+    ? "administracion"
+    : "solicitante"
+}
+
 export function SeguimientoTramite() {
   const [
     cargando,
@@ -146,14 +196,19 @@ export function SeguimientoTramite() {
   ] = useState<Tramite | null>(null)
 
   const [
+    mensajes,
+    setMensajes,
+  ] = useState<MensajeChat[]>([])
+
+  const [
     documentos,
     setDocumentos,
   ] = useState<Documento[]>([])
 
   const [
-    historial,
-    setHistorial,
-  ] = useState<Historial[]>([])
+    cerrado,
+    setCerrado,
+  ] = useState(false)
 
   const [
     numeroTramite,
@@ -166,9 +221,14 @@ export function SeguimientoTramite() {
   ] = useState("")
 
   const [
-    mensaje,
-    setMensaje,
+    textoMensaje,
+    setTextoMensaje,
   ] = useState("")
+
+  const [
+    archivos,
+    setArchivos,
+  ] = useState<File[]>([])
 
   const [
     enviando,
@@ -176,16 +236,102 @@ export function SeguimientoTramite() {
   ] = useState(false)
 
   const [
-    subiendo,
-    setSubiendo,
+    ingresando,
+    setIngresando,
   ] = useState(false)
 
   const [
-    archivos,
-    setArchivos,
-  ] = useState<File[]>([])
+    aviso,
+    setAviso,
+  ] = useState("")
 
-  async function cargarSesion() {
+  const [
+    error,
+    setError,
+  ] = useState("")
+
+  const chatRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    )
+
+  const inputArchivosRef =
+    useRef<HTMLInputElement | null>(
+      null,
+    )
+
+  const itemsChat =
+    useMemo<ItemChat[]>(() => {
+      const items: ItemChat[] = []
+
+      mensajes.forEach(
+        (mensaje) => {
+          items.push({
+            tipo: "mensaje",
+            fecha:
+              mensaje.created_at,
+            id:
+              `mensaje-${mensaje.id}`,
+            autor:
+              mensaje.autor,
+            mensaje:
+              mensaje.mensaje,
+          })
+        },
+      )
+
+      documentos.forEach(
+        (documento) => {
+          items.push({
+            tipo: "documento",
+            fecha:
+              documento.created_at,
+            id:
+              `documento-${documento.id}`,
+            autor:
+              autorDocumento(
+                documento.origen,
+              ),
+            documento,
+          })
+        },
+      )
+
+      return items.sort(
+        (a, b) => {
+          const diferencia =
+            new Date(
+              a.fecha,
+            ).getTime() -
+            new Date(
+              b.fecha,
+            ).getTime()
+
+          if (diferencia !== 0) {
+            return diferencia
+          }
+
+          return a.id.localeCompare(
+            b.id,
+          )
+        },
+      )
+    }, [mensajes, documentos])
+
+  function bajarChat() {
+    window.setTimeout(() => {
+      if (!chatRef.current) {
+        return
+      }
+
+      chatRef.current.scrollTop =
+        chatRef.current.scrollHeight
+    }, 50)
+  }
+
+  async function cargarSesion(
+    moverAbajo = false,
+  ) {
     try {
       const respuesta =
         await fetch(
@@ -206,45 +352,66 @@ export function SeguimientoTramite() {
       ) {
         setAutenticado(false)
         setTramite(null)
+        setMensajes([])
         setDocumentos([])
-        setHistorial([])
+        setCerrado(false)
         return
       }
 
       setAutenticado(true)
-
       setTramite(
         resultado.tramite,
       )
-
+      setMensajes(
+        resultado.mensajes || [],
+      )
       setDocumentos(
         resultado.documentos || [],
       )
-
-      setHistorial(
-        resultado.historial || [],
+      setCerrado(
+        Boolean(
+          resultado.cerrado,
+        ),
       )
+
+      if (moverAbajo) {
+        bajarChat()
+      }
     } catch {
       setAutenticado(false)
       setTramite(null)
+      setMensajes([])
       setDocumentos([])
-      setHistorial([])
+      setCerrado(false)
     } finally {
       setCargando(false)
     }
   }
 
   useEffect(() => {
-    void cargarSesion()
+    void cargarSesion(true)
   }, [])
+
+  useEffect(() => {
+    if (
+      autenticado &&
+      itemsChat.length > 0
+    ) {
+      bajarChat()
+    }
+  }, [
+    autenticado,
+    itemsChat.length,
+  ])
 
   async function ingresar(
     event: React.FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault()
 
-    setEnviando(true)
-    setMensaje("")
+    setIngresando(true)
+    setAviso("")
+    setError("")
 
     try {
       const respuesta =
@@ -256,11 +423,13 @@ export function SeguimientoTramite() {
               "Content-Type":
                 "application/json",
             },
-            body: JSON.stringify({
-              numeroTramite:
-                numeroTramite.trim(),
-              email: email.trim(),
-            }),
+            body:
+              JSON.stringify({
+                numeroTramite:
+                  numeroTramite.trim(),
+                email:
+                  email.trim(),
+              }),
           },
         )
 
@@ -275,15 +444,16 @@ export function SeguimientoTramite() {
       }
 
       setCargando(true)
-      await cargarSesion()
-    } catch (error) {
-      setMensaje(
-        error instanceof Error
-          ? error.message
+      await cargarSesion(true)
+    } catch (errorIngreso) {
+      setError(
+        errorIngreso instanceof
+          Error
+          ? errorIngreso.message
           : "No se pudo acceder al trámite.",
       )
     } finally {
-      setEnviando(false)
+      setIngresando(false)
     }
   }
 
@@ -298,34 +468,21 @@ export function SeguimientoTramite() {
     } finally {
       setAutenticado(false)
       setTramite(null)
+      setMensajes([])
       setDocumentos([])
-      setHistorial([])
+      setCerrado(false)
       setNumeroTramite("")
       setEmail("")
-      setMensaje("")
+      setTextoMensaje("")
       setArchivos([])
+      setAviso("")
+      setError("")
     }
   }
 
-  async function subirDocumentos(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault()
-
-    if (
-      archivos.length === 0
-    ) {
-      setMensaje(
-        "Seleccioná al menos un archivo.",
-      )
-      return
-    }
-
+  function validarArchivos() {
     if (archivos.length > 10) {
-      setMensaje(
-        "Podés seleccionar como máximo 10 archivos.",
-      )
-      return
+      return "Podés seleccionar como máximo 10 archivos."
     }
 
     const archivoGrande =
@@ -336,89 +493,192 @@ export function SeguimientoTramite() {
       )
 
     if (archivoGrande) {
-      setMensaje(
-        `El archivo "${archivoGrande.name}" supera el límite de 10 MB.`,
+      return `El archivo "${archivoGrande.name}" supera el límite de 10 MB.`
+    }
+
+    const tiposPermitidos =
+      new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+      ])
+
+    const archivoNoPermitido =
+      archivos.find(
+        (archivo) =>
+          !tiposPermitidos.has(
+            archivo.type,
+          ),
+      )
+
+    if (archivoNoPermitido) {
+      return `El archivo "${archivoNoPermitido.name}" no tiene un formato permitido.`
+    }
+
+    if (
+      documentos.length +
+        archivos.length >
+      10
+    ) {
+      return "El trámite admite como máximo 10 archivos activos."
+    }
+
+    return ""
+  }
+
+  async function subirArchivos() {
+    if (archivos.length === 0) {
+      return
+    }
+
+    const formData =
+      new FormData()
+
+    archivos.forEach(
+      (archivo) => {
+        formData.append(
+          "documentos",
+          archivo,
+        )
+      },
+    )
+
+    const respuesta =
+      await fetch(
+        "/api/tramite/documentos",
+        {
+          method: "POST",
+          body: formData,
+        },
+      )
+
+    const resultado =
+      await respuesta.json()
+
+    if (!respuesta.ok) {
+      throw new Error(
+        resultado?.error ||
+          "El mensaje fue enviado, pero no se pudieron cargar los archivos.",
+      )
+    }
+  }
+
+  async function enviarMensaje(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault()
+
+    if (cerrado) {
+      return
+    }
+
+    const texto =
+      textoMensaje.trim()
+
+    if (
+      !texto &&
+      archivos.length === 0
+    ) {
+      setError(
+        "Escribí un mensaje o adjuntá un archivo antes de enviar.",
       )
       return
     }
 
-    setSubiendo(true)
-    setMensaje("")
+    const errorArchivos =
+      validarArchivos()
+
+    if (errorArchivos) {
+      setError(
+        errorArchivos,
+      )
+      return
+    }
+
+    setEnviando(true)
+    setAviso("")
+    setError("")
+
+    let mensajeEnviado =
+      false
 
     try {
-      const formData =
-        new FormData()
-
-      archivos.forEach(
-        (archivo) => {
-          formData.append(
-            "documentos",
-            archivo,
+      if (texto) {
+        const respuesta =
+          await fetch(
+            "/api/tramite",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body:
+                JSON.stringify({
+                  accion:
+                    "enviar_mensaje",
+                  mensaje:
+                    texto,
+                }),
+            },
           )
-        },
-      )
 
-      const respuesta =
-        await fetch(
-          "/api/tramite/documentos",
-          {
-            method: "POST",
-            body: formData,
-          },
-        )
+        const resultado =
+          await respuesta.json()
 
-      const resultado =
-        await respuesta.json()
+        if (!respuesta.ok) {
+          throw new Error(
+            resultado?.error ||
+              "No se pudo enviar el mensaje.",
+          )
+        }
 
-      if (!respuesta.ok) {
-        throw new Error(
-          resultado?.error ||
-            "No se pudieron cargar los documentos.",
-        )
+        mensajeEnviado = true
       }
 
+      if (
+        archivos.length > 0
+      ) {
+        await subirArchivos()
+      }
+
+      setTextoMensaje("")
       setArchivos([])
 
-      const input =
-        document.getElementById(
-          "documentos-tramite",
-        ) as HTMLInputElement | null
-
-      if (input) {
-        input.value = ""
+      if (
+        inputArchivosRef.current
+      ) {
+        inputArchivosRef.current.value =
+          ""
       }
 
-      setMensaje(
-        "Documentación cargada correctamente.",
+      setAviso(
+        "Mensaje enviado correctamente.",
       )
 
-      await cargarSesion()
-    } catch (error) {
-      setMensaje(
-        error instanceof Error
-          ? error.message
-          : "No se pudieron cargar los documentos.",
-      )
+      await cargarSesion(true)
+    } catch (errorEnvio) {
+      if (mensajeEnviado) {
+        setError(
+          errorEnvio instanceof
+            Error
+            ? errorEnvio.message
+            : "El mensaje fue enviado, pero hubo un problema con los archivos.",
+        )
+
+        await cargarSesion(true)
+      } else {
+        setError(
+          errorEnvio instanceof
+            Error
+            ? errorEnvio.message
+            : "No se pudo enviar el mensaje.",
+        )
+      }
     } finally {
-      setSubiendo(false)
+      setEnviando(false)
     }
   }
-
-  const permiteCarga =
-    tramite &&
-    ![
-      "respondida",
-      "aprobado",
-      "rechazado",
-      "archivada",
-    ].includes(tramite.estado) &&
-    (
-      tramite.motivo ===
-        "documentacion" ||
-      tramite.requiere_documentacion ||
-      tramite.estado ===
-        "falta_documentacion"
-    )
 
   if (cargando) {
     return (
@@ -447,7 +707,7 @@ export function SeguimientoTramite() {
             </h2>
 
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              El número de trámite y el correo deben coincidir con los datos registrados.
+              Ingresá el número de trámite y el mismo correo electrónico usado al realizar la consulta.
             </p>
           </div>
         </div>
@@ -471,7 +731,7 @@ export function SeguimientoTramite() {
                 )
               }
               className="w-full rounded-lg border border-input bg-background px-3 py-3 text-sm uppercase text-foreground outline-none transition focus:border-primary"
-              placeholder="REN-20260907-123456"
+              placeholder="REN-20260908-123456"
               autoComplete="off"
             />
           </label>
@@ -498,20 +758,20 @@ export function SeguimientoTramite() {
 
           <button
             type="submit"
-            disabled={enviando}
+            disabled={ingresando}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Search className="size-4" />
 
-            {enviando
+            {ingresando
               ? "Ingresando..."
               : "Consultar trámite"}
           </button>
 
-          {mensaje ? (
-            <p className="text-sm text-red-700">
-              {mensaje}
-            </p>
+          {error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {error}
+            </div>
           ) : null}
         </form>
       </div>
@@ -523,265 +783,354 @@ export function SeguimientoTramite() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Número de trámite
-          </p>
-
-          <p className="mt-1 text-xl font-black text-foreground">
-            {tramite.numero_tramite}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={salir}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
-        >
-          <LogOut className="size-4" />
-          Salir
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Titular
-          </p>
-
-          <p className="mt-1 font-semibold text-foreground">
-            {tramite.nombre}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Estado
-          </p>
-
-          <p className="mt-1 font-semibold text-foreground">
-            {etiquetaEstado(
-              tramite.estado,
-            )}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Motivo
-          </p>
-
-          <p className="mt-1 font-semibold text-foreground">
-            {etiquetaMotivo(
-              tramite.motivo,
-            )}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Fecha de inicio
-          </p>
-
-          <p className="mt-1 font-semibold text-foreground">
-            {fechaArgentina(
-              tramite.created_at,
-            )}
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-5">
       <div className="rounded-xl border border-border bg-card p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Consulta enviada
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Número de trámite
+            </p>
 
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-          {tramite.mensaje}
-        </p>
+            <p className="mt-1 text-xl font-black text-foreground">
+              {tramite.numero_tramite}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={salir}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
+          >
+            <LogOut className="size-4" />
+            Salir
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-muted/50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              Titular
+            </p>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {tramite.nombre}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-muted/50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              Motivo
+            </p>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {etiquetaMotivo(
+                tramite.motivo,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-muted/50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              Estado
+            </p>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {cerrado
+                ? "Caso cerrado"
+                : etiquetaEstado(
+                    tramite.estado,
+                  )}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {tramite.respuesta_publica ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-green-800">
-            Respuesta de RENACLI
+      {tramite.esperando_documentacion ||
+      tramite.estado ===
+        "falta_documentacion" ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            RENACLI está esperando documentación para continuar con este trámite.
           </p>
 
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-green-950">
-            {tramite.respuesta_publica}
+          {tramite.detalle_documentacion_faltante ? (
+            <p className="mt-1 text-sm text-amber-900">
+              {
+                tramite.detalle_documentacion_faltante
+              }
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {cerrado ? (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-semibold text-green-900">
+            Este caso está cerrado. La conversación queda disponible para consulta.
           </p>
         </div>
       ) : null}
 
-      {tramite.detalle_documentacion_faltante ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-            Documentación solicitada
-          </p>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-lg font-bold text-foreground">
+            Conversación con RENACLI
+          </h2>
 
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-amber-950">
-            {
-              tramite.detalle_documentacion_faltante
-            }
+          <p className="mt-1 text-sm text-muted-foreground">
+            Los mensajes y archivos quedan guardados dentro de este trámite.
           </p>
         </div>
-      ) : null}
 
-      {permiteCarga ? (
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Upload className="size-5" />
-            </span>
-
-            <div>
-              <h2 className="font-bold text-foreground">
-                Adjuntar documentación
-              </h2>
-
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Se aceptan PDF, JPG, JPEG y PNG. Máximo 10 MB por archivo y hasta 10 archivos activos por trámite.
+        <div
+          ref={chatRef}
+          className="h-[460px] overflow-y-auto bg-muted/20 px-4 py-5 sm:px-5"
+        >
+          {itemsChat.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-center text-sm text-muted-foreground">
+                Todavía no hay mensajes en esta conversación.
               </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {itemsChat.map(
+                (item) => {
+                  const esRenacli =
+                    item.autor ===
+                    "administracion"
 
+                  const esSistema =
+                    item.autor ===
+                    "sistema"
+
+                  if (
+                    item.tipo ===
+                    "mensaje"
+                  ) {
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex ${
+                          esRenacli
+                            ? "justify-start"
+                            : esSistema
+                              ? "justify-center"
+                              : "justify-end"
+                        }`}
+                      >
+                        <div
+                          className={
+                            esSistema
+                              ? "max-w-[92%] rounded-lg border border-border bg-background px-4 py-3 text-center"
+                              : esRenacli
+                                ? "max-w-[86%] rounded-2xl rounded-tl-sm border border-border bg-background px-4 py-3 shadow-sm sm:max-w-[75%]"
+                                : "max-w-[86%] rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-primary-foreground shadow-sm sm:max-w-[75%]"
+                          }
+                        >
+                          {!esSistema ? (
+                            <p
+                              className={`mb-1 text-xs font-bold ${
+                                esRenacli
+                                  ? "text-primary"
+                                  : "text-primary-foreground/80"
+                              }`}
+                            >
+                              {esRenacli
+                                ? "RENACLI"
+                                : "Vos"}
+                            </p>
+                          ) : null}
+
+                          <p
+                            className={`whitespace-pre-wrap text-sm leading-relaxed ${
+                              esSistema
+                                ? "text-muted-foreground"
+                                : esRenacli
+                                  ? "text-foreground"
+                                  : "text-primary-foreground"
+                            }`}
+                          >
+                            {item.mensaje}
+                          </p>
+
+                          <p
+                            className={`mt-2 text-[11px] ${
+                              esSistema
+                                ? "text-muted-foreground"
+                                : esRenacli
+                                  ? "text-muted-foreground"
+                                  : "text-primary-foreground/70"
+                            }`}
+                          >
+                            {fechaArgentina(
+                              item.fecha,
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  const documento =
+                    item.documento
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex ${
+                        esRenacli
+                          ? "justify-start"
+                          : "justify-end"
+                      }`}
+                    >
+                      <a
+                        href={`/api/tramite/documentos/${documento.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={
+                          esRenacli
+                            ? "max-w-[86%] rounded-2xl rounded-tl-sm border border-border bg-background px-4 py-3 shadow-sm transition hover:bg-muted/50 sm:max-w-[75%]"
+                            : "max-w-[86%] rounded-2xl rounded-tr-sm border border-primary/20 bg-primary/10 px-4 py-3 shadow-sm transition hover:bg-primary/15 sm:max-w-[75%]"
+                        }
+                      >
+                        <p className="mb-2 text-xs font-bold text-primary">
+                          {esRenacli
+                            ? "RENACLI adjuntó un archivo"
+                            : "Archivo enviado"}
+                        </p>
+
+                        <div className="flex items-center gap-3">
+                          <FileText className="size-5 shrink-0 text-primary" />
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {
+                                documento.nombre_original
+                              }
+                            </p>
+
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {tamanoLegible(
+                                documento.tamano_bytes,
+                              )}
+                              {" · "}
+                              {fechaArgentina(
+                                documento.created_at,
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </a>
+                    </div>
+                  )
+                },
+              )}
+            </div>
+          )}
+        </div>
+
+        {!cerrado ? (
           <form
-            onSubmit={subirDocumentos}
-            className="mt-4 space-y-4"
+            onSubmit={enviarMensaje}
+            className="border-t border-border bg-background p-4"
           >
-            <input
-              id="documentos-tramite"
-              type="file"
-              multiple
-              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            <textarea
+              value={textoMensaje}
               onChange={(event) =>
-                setArchivos(
-                  Array.from(
-                    event.target.files ||
-                      [],
-                  ),
+                setTextoMensaje(
+                  event.target.value,
                 )
               }
-              className="block w-full rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground"
+              rows={3}
+              maxLength={5000}
+              placeholder="Escribí tu mensaje para RENACLI..."
+              className="w-full resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary"
             />
 
-            <button
-              type="submit"
-              disabled={subiendo}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Upload className="size-4" />
+            {archivos.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <p className="text-xs font-semibold text-foreground">
+                  Archivos seleccionados:
+                </p>
 
-              {subiendo
-                ? "Subiendo..."
-                : "Subir documentación"}
-            </button>
-          </form>
-        </div>
-      ) : null}
-
-      {mensaje ? (
-        <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-foreground">
-          {mensaje}
-        </div>
-      ) : null}
-
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="font-bold text-foreground">
-          Documentos del trámite
-        </h2>
-
-        {documentos.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Todavía no hay documentos cargados.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {documentos.map(
-              (documento) => (
-                <a
-                  key={documento.id}
-                  href={`/api/tramite/documentos/${documento.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition hover:bg-muted/50"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <FileText className="size-5 shrink-0 text-primary" />
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {
-                          documento.nombre_original
-                        }
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">
-                        {tamanoLegible(
-                          documento.tamano_bytes,
-                        )}
+                <div className="mt-1 space-y-1">
+                  {archivos.map(
+                    (archivo) => (
+                      <p
+                        key={`${archivo.name}-${archivo.size}-${archivo.lastModified}`}
+                        className="truncate text-xs text-muted-foreground"
+                      >
+                        {archivo.name}
                         {" · "}
-                        {fechaArgentina(
-                          documento.created_at,
+                        {tamanoLegible(
+                          archivo.size,
                         )}
                       </p>
-                    </div>
-                  </div>
-
-                  <span className="text-xs font-semibold text-primary">
-                    Abrir
-                  </span>
-                </a>
-              ),
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="font-bold text-foreground">
-          Historial del trámite
-        </h2>
-
-        {historial.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Todavía no hay movimientos registrados.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {historial.map(
-              (evento) => (
-                <div
-                  key={evento.id}
-                  className="rounded-lg border border-border px-4 py-3"
-                >
-                  <p className="text-sm font-semibold text-foreground">
-                    {evento.estado_nuevo
-                      ? etiquetaEstado(
-                          evento.estado_nuevo,
-                        )
-                      : evento.tipo_evento}
-                  </p>
-
-                  {evento.descripcion ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {evento.descripcion}
-                    </p>
-                  ) : null}
-
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {fechaArgentina(
-                      evento.created_at,
-                    )}
-                  </p>
+                    ),
+                  )}
                 </div>
-              ),
-            )}
-          </div>
-        )}
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <input
+                  ref={
+                    inputArchivosRef
+                  }
+                  id="archivos-chat-tramite"
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(event) =>
+                    setArchivos(
+                      Array.from(
+                        event.target
+                          .files || [],
+                      ),
+                    )
+                  }
+                  className="sr-only"
+                />
+
+                <label
+                  htmlFor="archivos-chat-tramite"
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted"
+                >
+                  <Paperclip className="size-4" />
+                  Adjuntar archivo
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={enviando}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Send className="size-4" />
+
+                {enviando
+                  ? "Enviando..."
+                  : "Enviar mensaje"}
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Archivos permitidos: PDF, JPG, JPEG y PNG. Máximo 10 MB por archivo y hasta 10 archivos activos por trámite.
+            </p>
+          </form>
+        ) : null}
       </div>
+
+      {aviso ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-900">
+          {aviso}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      ) : null}
     </div>
   )
 }
