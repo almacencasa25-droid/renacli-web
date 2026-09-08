@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@supabase/supabase-js"
+import BotonCerrarTramite from "./BotonCerrarTramite"
 
 const COOKIE_NAME = "renacli_admin_session"
 
@@ -2345,38 +2346,10 @@ function ConsultaCard({
               </form>
 
 
-              <form
+              <BotonCerrarTramite
+                id={consulta.id}
                 action={cerrarTramiteAdministrador}
-                style={{
-                  marginTop: "14px",
-                  paddingTop: "14px",
-                  borderTop: "1px solid #e2e8f0",
-                }}
-              >
-                <input type="hidden" name="id" value={consulta.id} />
-
-                <button
-                  type="submit"
-                  style={{
-                    ...botonRojo,
-                    background: "#475569",
-                  }}
-                >
-                  Trámite terminado
-                </button>
-
-                <p
-                  style={{
-                    margin: "7px 0 0",
-                    color: "#64748b",
-                    fontSize: "12px",
-                  }}
-                >
-                  Usalo únicamente cuando ya terminaste la gestión.
-                  El trámite saldrá de pendientes y pasará automáticamente
-                  al archivo de trámites terminados.
-                </p>
-              </form>
+              />
             </div>
           ) : null}
         </div>
