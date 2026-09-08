@@ -389,42 +389,7 @@ export function SeguimientoTramite() {
   }
 
   useEffect(() => {
-    let activo = true
-
-    async function prepararAccesoSeguro() {
-      try {
-        await fetch(
-          "/api/tramite",
-          {
-            method: "DELETE",
-            cache: "no-store",
-          },
-        )
-      } finally {
-        if (!activo) {
-          return
-        }
-
-        setAutenticado(false)
-        setTramite(null)
-        setMensajes([])
-        setDocumentos([])
-        setCerrado(false)
-        setNumeroTramite("")
-        setEmail("")
-        setTextoMensaje("")
-        setArchivos([])
-        setAviso("")
-        setError("")
-        setCargando(false)
-      }
-    }
-
-    void prepararAccesoSeguro()
-
-    return () => {
-      activo = false
-    }
+    void cargarSesion(true)
   }, [])
 
   useEffect(() => {
@@ -669,6 +634,7 @@ export function SeguimientoTramite() {
         }
 
         mensajeEnviado = true
+        setTextoMensaje("")
       }
 
       if (
@@ -677,7 +643,6 @@ export function SeguimientoTramite() {
         await subirArchivos()
       }
 
-      setTextoMensaje("")
       setArchivos([])
 
       if (
