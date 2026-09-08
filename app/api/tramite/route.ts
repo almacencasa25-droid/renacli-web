@@ -14,10 +14,22 @@ const COOKIE_NAME =
 const DURACION_SESION =
   60 * 60 * 2
 
+const ESTADOS_CERRADOS = [
+  "respondida",
+  "aprobado",
+  "rechazado",
+  "archivada",
+]
+
 type SesionTramite = {
   consultaId: number
   numeroTramite: string
   exp: number
+}
+
+type ResultadoSesion = {
+  sesion: SesionTramite
+  token: string
 }
 
 function textoSeguro(
@@ -88,11 +100,13 @@ function verificarToken(
     const recibida =
       Buffer.from(
         firmaRecibida,
+        "utf8",
       )
 
     const esperada =
       Buffer.from(
         firmaEsperada,
+        "utf8",
       )
 
     if (
@@ -162,153 +176,462 @@ function crearSupabase() {
   )
 }
 
+function obtenerSesion(
+  request: NextRequest,
+): ResultadoSesion | null {
+  const token =
+    request.cookies.get(
+      COOKIE_NAME,
+    )?.value
+
+  if (!token) {
+    return null
+  }
+
+  const sesion =
+    verificarToken(token)
+
+  if (!sesion) {
+    return null
+  }
+
+  return {
+    sesion,
+    token,
+  }
+}
+
+function respuestaSesionInvalida() {
+  const respuesta =
+    NextResponse.json(
+      {
+        autenticado: false,
+      },
+      {
+        status: 401,
+      },
+    )
+
+  respuesta.cookies.set(
+    COOKIE_NAME,
+    "",
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV ===
+        "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    },
+  )
+
+  return respuesta
+}
+
+async function iniciarSesion(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
+  const supabase =
+    crearSupabase()
+
+  if (!supabase) {
+    return NextResponse.json(
+      {
+        error:
+          "Configuración del servidor incompleta.",
+      },
+      {
+        status: 500,
+      },
+    )
+  }
+
+  const numeroTramite =
+    textoSeguro(
+      body?.numeroTramite,
+      40,
+    ).toUpperCase()
+
+  const email =
+    textoSeguro(
+      body?.email,
+      160,
+    ).toLowerCase()
+
+  if (
+    !numeroTramite ||
+    !email
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Ingresá el número de trámite y el correo electrónico.",
+      },
+      {
+        status: 400,
+      },
+    )
+  }
+
+  if (!emailValido(email)) {
+    return NextResponse.json(
+      {
+        error:
+          "Ingresá un correo electrónico válido.",
+      },
+      {
+        status: 400,
+      },
+    )
+  }
+
+  const {
+    data: consulta,
+    error,
+  } = await supabase
+    .from(
+      "consultas_contacto",
+    )
+    .select(
+      "id, numero_tramite, email",
+    )
+    .eq(
+      "numero_tramite",
+      numeroTramite,
+    )
+    .ilike(
+      "email",
+      email,
+    )
+    .maybeSingle()
+
+  if (error) {
+    console.error(
+      "Error verificando trámite RENACLI:",
+      error,
+    )
+
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo verificar el trámite.",
+      },
+      {
+        status: 500,
+      },
+    )
+  }
+
+  if (!consulta) {
+    return NextResponse.json(
+      {
+        error:
+          "El número de trámite o el correo electrónico no coinciden.",
+      },
+      {
+        status: 401,
+      },
+    )
+  }
+
+  const ahora =
+    Math.floor(
+      Date.now() / 1000,
+    )
+
+  const token =
+    crearToken({
+      consultaId:
+        consulta.id,
+      numeroTramite:
+        consulta.numero_tramite,
+      exp:
+        ahora +
+        DURACION_SESION,
+    })
+
+  const respuesta =
+    NextResponse.json({
+      ok: true,
+    })
+
+  respuesta.cookies.set(
+    COOKIE_NAME,
+    token,
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV ===
+        "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge:
+        DURACION_SESION,
+    },
+  )
+
+  return respuesta
+}
+
+async function enviarMensajeSolicitante(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
+  const supabase =
+    crearSupabase()
+
+  if (!supabase) {
+    return NextResponse.json(
+      {
+        error:
+          "Configuración del servidor incompleta.",
+      },
+      {
+        status: 500,
+      },
+    )
+  }
+
+  const resultadoSesion =
+    obtenerSesion(request)
+
+  if (!resultadoSesion) {
+    return respuestaSesionInvalida()
+  }
+
+  const mensaje =
+    textoSeguro(
+      body?.mensaje,
+      5000,
+    )
+
+  if (!mensaje) {
+    return NextResponse.json(
+      {
+        error:
+          "Escribí un mensaje antes de enviarlo.",
+      },
+      {
+        status: 400,
+      },
+    )
+  }
+
+  const { sesion } =
+    resultadoSesion
+
+  const {
+    data: consulta,
+    error: errorConsulta,
+  } = await supabase
+    .from(
+      "consultas_contacto",
+    )
+    .select(
+      `
+        id,
+        numero_tramite,
+        estado,
+        cerrado_en
+      `,
+    )
+    .eq(
+      "id",
+      sesion.consultaId,
+    )
+    .eq(
+      "numero_tramite",
+      sesion.numeroTramite,
+    )
+    .maybeSingle()
+
+  if (
+    errorConsulta ||
+    !consulta
+  ) {
+    if (errorConsulta) {
+      console.error(
+        "Error leyendo trámite para enviar mensaje:",
+        errorConsulta,
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo encontrar el trámite.",
+      },
+      {
+        status: 404,
+      },
+    )
+  }
+
+  if (
+    consulta.cerrado_en ||
+    ESTADOS_CERRADOS.includes(
+      consulta.estado,
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Este trámite ya está cerrado y no admite nuevos mensajes.",
+      },
+      {
+        status: 409,
+      },
+    )
+  }
+
+  const ahora =
+    new Date().toISOString()
+
+  const {
+    data: mensajeCreado,
+    error: errorMensaje,
+  } = await supabase
+    .from(
+      "mensajes_tramites",
+    )
+    .insert({
+      consulta_id:
+        consulta.id,
+      autor:
+        "solicitante",
+      mensaje,
+      visible_solicitante:
+        true,
+      es_mensaje_sistema:
+        false,
+      created_at:
+        ahora,
+    })
+    .select(
+      `
+        id,
+        consulta_id,
+        autor,
+        mensaje,
+        visible_solicitante,
+        es_mensaje_sistema,
+        created_at
+      `,
+    )
+    .single()
+
+  if (
+    errorMensaje ||
+    !mensajeCreado
+  ) {
+    console.error(
+      "Error guardando mensaje del solicitante:",
+      errorMensaje,
+    )
+
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo enviar el mensaje.",
+      },
+      {
+        status: 500,
+      },
+    )
+  }
+
+  const {
+    error: errorActualizar,
+  } = await supabase
+    .from(
+      "consultas_contacto",
+    )
+    .update({
+      ultimo_mensaje_en:
+        ahora,
+      ultimo_mensaje_origen:
+        "solicitante",
+      updated_at:
+        ahora,
+    })
+    .eq(
+      "id",
+      consulta.id,
+    )
+
+  if (errorActualizar) {
+    console.error(
+      "Error actualizando último mensaje del trámite:",
+      errorActualizar,
+    )
+  }
+
+  const {
+    error: errorHistorial,
+  } = await supabase
+    .from(
+      "historial_tramites",
+    )
+    .insert({
+      consulta_id:
+        consulta.id,
+      tipo_evento:
+        "mensaje",
+      estado_anterior:
+        consulta.estado,
+      estado_nuevo:
+        consulta.estado,
+      descripcion:
+        "El solicitante envió un mensaje.",
+      origen:
+        "solicitante",
+      created_at:
+        ahora,
+    })
+
+  if (errorHistorial) {
+    console.error(
+      "Error registrando mensaje en historial:",
+      errorHistorial,
+    )
+  }
+
+  return NextResponse.json({
+    ok: true,
+    mensaje:
+      mensajeCreado,
+  })
+}
+
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    const supabase =
-      crearSupabase()
-
-    if (!supabase) {
-      return NextResponse.json(
-        {
-          error:
-            "Configuración del servidor incompleta.",
-        },
-        {
-          status: 500,
-        },
-      )
-    }
-
     const body =
       await request.json()
 
-    const numeroTramite =
+    const accion =
       textoSeguro(
-        body?.numeroTramite,
+        body?.accion,
         40,
-      ).toUpperCase()
-
-    const email =
-      textoSeguro(
-        body?.email,
-        160,
-      ).toLowerCase()
+      )
 
     if (
-      !numeroTramite ||
-      !email
+      accion ===
+      "enviar_mensaje"
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Ingresá el número de trámite y el correo electrónico.",
-        },
-        {
-          status: 400,
-        },
+      return await enviarMensajeSolicitante(
+        request,
+        body,
       )
     }
 
-    if (!emailValido(email)) {
-      return NextResponse.json(
-        {
-          error:
-            "Ingresá un correo electrónico válido.",
-        },
-        {
-          status: 400,
-        },
-      )
-    }
-
-    const {
-      data: consulta,
-      error,
-    } = await supabase
-      .from(
-        "consultas_contacto",
-      )
-      .select(
-        "id, numero_tramite, email",
-      )
-      .eq(
-        "numero_tramite",
-        numeroTramite,
-      )
-      .ilike(
-        "email",
-        email,
-      )
-      .maybeSingle()
-
-    if (error) {
-      console.error(
-        "Error verificando trámite RENACLI:",
-        error,
-      )
-
-      return NextResponse.json(
-        {
-          error:
-            "No se pudo verificar el trámite.",
-        },
-        {
-          status: 500,
-        },
-      )
-    }
-
-    if (!consulta) {
-      return NextResponse.json(
-        {
-          error:
-            "El número de trámite o el correo electrónico no coinciden.",
-        },
-        {
-          status: 401,
-        },
-      )
-    }
-
-    const ahora =
-      Math.floor(
-        Date.now() / 1000,
-      )
-
-    const token =
-      crearToken({
-        consultaId:
-          consulta.id,
-        numeroTramite:
-          consulta.numero_tramite,
-        exp:
-          ahora +
-          DURACION_SESION,
-      })
-
-    const respuesta =
-      NextResponse.json({
-        ok: true,
-      })
-
-    respuesta.cookies.set(
-      COOKIE_NAME,
-      token,
-      {
-        httpOnly: true,
-        secure:
-          process.env.NODE_ENV ===
-          "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge:
-          DURACION_SESION,
-      },
+    return await iniciarSesion(
+      request,
+      body,
     )
-
-    return respuesta
   } catch (error) {
     console.error(
       "Error en /api/tramite:",
@@ -318,7 +641,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "No se pudo procesar el acceso al trámite.",
+          "No se pudo procesar la solicitud.",
       },
       {
         status: 500,
@@ -346,52 +669,15 @@ export async function GET(
       )
     }
 
-    const token =
-      request.cookies.get(
-        COOKIE_NAME,
-      )?.value
+    const resultadoSesion =
+      obtenerSesion(request)
 
-    if (!token) {
-      return NextResponse.json(
-        {
-          autenticado: false,
-        },
-        {
-          status: 401,
-        },
-      )
+    if (!resultadoSesion) {
+      return respuestaSesionInvalida()
     }
 
-    const sesion =
-      verificarToken(token)
-
-    if (!sesion) {
-      const respuesta =
-        NextResponse.json(
-          {
-            autenticado: false,
-          },
-          {
-            status: 401,
-          },
-        )
-
-      respuesta.cookies.set(
-        COOKIE_NAME,
-        "",
-        {
-          httpOnly: true,
-          secure:
-            process.env.NODE_ENV ===
-            "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 0,
-        },
-      )
-
-      return respuesta
-    }
+    const { sesion } =
+      resultadoSesion
 
     const {
       data: consulta,
@@ -411,6 +697,10 @@ export async function GET(
           respuesta_publica,
           detalle_documentacion_faltante,
           requiere_documentacion,
+          esperando_documentacion,
+          ultimo_mensaje_en,
+          ultimo_mensaje_origen,
+          cerrado_en,
           created_at,
           updated_at,
           fecha_en_revision,
@@ -452,6 +742,52 @@ export async function GET(
     }
 
     const {
+      data: mensajes,
+      error:
+        errorMensajes,
+    } = await supabase
+      .from(
+        "mensajes_tramites",
+      )
+      .select(
+        `
+          id,
+          consulta_id,
+          autor,
+          mensaje,
+          es_mensaje_sistema,
+          created_at
+        `,
+      )
+      .eq(
+        "consulta_id",
+        consulta.id,
+      )
+      .eq(
+        "visible_solicitante",
+        true,
+      )
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        },
+      )
+      .order(
+        "id",
+        {
+          ascending: true,
+        },
+      )
+
+    if (errorMensajes) {
+      console.error(
+        "Error leyendo mensajes del trámite:",
+        errorMensajes,
+      )
+    }
+
+    const {
       data: documentos,
       error:
         errorDocumentos,
@@ -462,6 +798,7 @@ export async function GET(
       .select(
         `
           id,
+          mensaje_id,
           nombre_original,
           mime_type,
           tamano_bytes,
@@ -481,7 +818,13 @@ export async function GET(
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending: true,
+        },
+      )
+      .order(
+        "id",
+        {
+          ascending: true,
         },
       )
 
@@ -515,8 +858,26 @@ export async function GET(
         "consulta_id",
         consulta.id,
       )
+      .in(
+        "tipo_evento",
+        [
+          "creacion",
+          "cambio_estado",
+          "documento_cargado",
+          "respuesta",
+          "mensaje",
+          "pedido_documentacion",
+          "cierre",
+        ],
+      )
       .order(
         "created_at",
+        {
+          ascending: false,
+        },
+      )
+      .order(
+        "id",
         {
           ascending: false,
         },
@@ -531,11 +892,21 @@ export async function GET(
 
     return NextResponse.json({
       autenticado: true,
-      tramite: consulta,
+      tramite:
+        consulta,
+      mensajes:
+        mensajes || [],
       documentos:
         documentos || [],
       historial:
         historial || [],
+      cerrado:
+        Boolean(
+          consulta.cerrado_en,
+        ) ||
+        ESTADOS_CERRADOS.includes(
+          consulta.estado,
+        ),
     })
   } catch (error) {
     console.error(
