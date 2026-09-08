@@ -316,28 +316,6 @@ export async function POST(
       )
     }
 
-    const permiteDocumentacion =
-      consulta.motivo ===
-        "documentacion" ||
-      consulta.requiere_documentacion ===
-        true ||
-      consulta.estado ===
-        "falta_documentacion"
-
-    if (
-      !permiteDocumentacion
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Este trámite no tiene documentación pendiente para cargar.",
-        },
-        {
-          status: 400,
-        },
-      )
-    }
-
     const formData =
       await request.formData()
 
