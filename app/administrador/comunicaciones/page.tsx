@@ -2,6 +2,7 @@ import crypto from "crypto"
 import Link from "next/link"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { revalidatePath } from "next/cache"
 import { createClient } from "@supabase/supabase-js"
 
 const COOKIE_NAME = "renacli_admin_session"
@@ -123,6 +124,7 @@ type Props = {
     tecnico?: string
     mensaje?: string
     error?: string
+    tramite?: string
   }>
 }
 
@@ -465,8 +467,10 @@ async function enviarMensajeAdministrador(formData: FormData) {
     }
   }
 
+  revalidatePath("/administrador/comunicaciones")
+
   redirect(
-    `/administrador/comunicaciones?tab=notificaciones&mensaje=chat_enviado#tramite-${id}`
+    `/administrador/comunicaciones?tab=notificaciones&mensaje=chat_enviado&tramite=${id}#tramite-${id}`
   )
 }
 
@@ -566,8 +570,10 @@ async function pedirDocumentacionAdministrador(formData: FormData) {
     )
   }
 
+  revalidatePath("/administrador/comunicaciones")
+
   redirect(
-    `/administrador/comunicaciones?tab=notificaciones&mensaje=documentacion_solicitada#tramite-${id}`
+    `/administrador/comunicaciones?tab=notificaciones&mensaje=documentacion_solicitada&tramite=${id}#tramite-${id}`
   )
 }
 
@@ -633,7 +639,7 @@ async function cerrarTramiteAdministrador(formData: FormData) {
     .insert({
       consulta_id: id,
       autor: "sistema",
-      mensaje: "RENACLI cerró este caso.",
+      mensaje: "RENACLI marcó este trámite como terminado.",
       visible_solicitante: true,
       es_mensaje_sistema: true,
       created_at: ahora,
@@ -653,7 +659,7 @@ async function cerrarTramiteAdministrador(formData: FormData) {
       tipo_evento: "cierre",
       estado_anterior: consulta.estado,
       estado_nuevo: "respondida",
-      descripcion: "RENACLI cerró el trámite.",
+      descripcion: "RENACLI marcó el trámite como terminado.",
       origen: "administracion",
       created_at: ahora,
     })
@@ -664,6 +670,8 @@ async function cerrarTramiteAdministrador(formData: FormData) {
       errorHistorial
     )
   }
+
+  revalidatePath("/administrador/comunicaciones")
 
   redirect(
     "/administrador/comunicaciones?tab=notificaciones&mensaje=tramite_cerrado#notificaciones"
@@ -858,6 +866,7 @@ export default async function ComunicacionesPage({
       : "calificaciones"
 
   const tecnicoSeleccionado = Number(parametros.tecnico ?? 0)
+  const tramiteSeleccionado = Number(parametros.tramite ?? 0)
   const supabase = obtenerSupabaseAdmin()
 
   const {
@@ -1676,6 +1685,7 @@ export default async function ComunicacionesPage({
                   mensajes={mensajesPorConsulta.get(consulta.id) ?? []}
                   documentos={documentosPorConsulta.get(consulta.id) ?? []}
                   historial={historialPorConsulta.get(consulta.id) ?? []}
+                  forzarAbierto={tramiteSeleccionado === consulta.id}
                 />
               ))
             )}
@@ -1719,6 +1729,7 @@ export default async function ComunicacionesPage({
                       mensajes={mensajesPorConsulta.get(consulta.id) ?? []}
                       documentos={documentosPorConsulta.get(consulta.id) ?? []}
                       historial={historialPorConsulta.get(consulta.id) ?? []}
+                      forzarAbierto={false}
                     />
                   ))
                 )}
@@ -1904,11 +1915,13 @@ function ConsultaCard({
   mensajes,
   documentos,
   historial,
+  forzarAbierto,
 }: {
   consulta: ConsultaContacto
   mensajes: MensajeTramite[]
   documentos: DocumentoTramite[]
   historial: HistorialTramite[]
+  forzarAbierto: boolean
 }) {
   const cerrado = Boolean(consulta.cerrado_en)
 
@@ -2041,7 +2054,10 @@ function ConsultaCard({
       </div>
 
       <details
-        open={consulta.ultimo_mensaje_origen === "solicitante" && !cerrado}
+        open={
+          !cerrado &&
+          (forzarAbierto || consulta.ultimo_mensaje_origen === "solicitante")
+        }
         style={{
           marginTop: "16px",
           border: "1px solid #dbe4ec",
