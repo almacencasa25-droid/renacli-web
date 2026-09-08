@@ -389,8 +389,72 @@ export function SeguimientoTramite() {
   }
 
   useEffect(() => {
-    void cargarSesion(true)
+    let activo = true
+
+    async function prepararAccesoSeguro() {
+      try {
+        await fetch(
+          "/api/tramite",
+          {
+            method: "DELETE",
+            cache: "no-store",
+          },
+        )
+      } finally {
+        if (!activo) {
+          return
+        }
+
+        setAutenticado(false)
+        setTramite(null)
+        setMensajes([])
+        setDocumentos([])
+        setCerrado(false)
+        setNumeroTramite("")
+        setEmail("")
+        setTextoMensaje("")
+        setArchivos([])
+        setAviso("")
+        setError("")
+        setCargando(false)
+      }
+    }
+
+    void prepararAccesoSeguro()
+
+    return () => {
+      activo = false
+    }
   }, [])
+
+  useEffect(() => {
+    if (!autenticado) {
+      return
+    }
+
+    const intervalo =
+      window.setInterval(() => {
+        if (
+          document.visibilityState !== "visible" ||
+          enviando ||
+          ingresando
+        ) {
+          return
+        }
+
+        void cargarSesion(false)
+      }, 5000)
+
+    return () => {
+      window.clearInterval(
+        intervalo,
+      )
+    }
+  }, [
+    autenticado,
+    enviando,
+    ingresando,
+  ])
 
   useEffect(() => {
     if (
