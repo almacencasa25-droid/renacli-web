@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
+import { createHash, timingSafeEqual } from "crypto"
 import QRCode from "qrcode"
 import { BotonPdfCarnet } from "@/components/boton-pdf-carnet"
 import { crearUrlFirmadaFoto } from "@/lib/fotos"
@@ -21,7 +22,9 @@ function obtenerSupabaseAdmin() {
   const secretKey = process.env.SUPABASE_SECRET_KEY
 
   if (!url || !secretKey) {
-    throw new Error("Faltan las variables de entorno de Supabase.")
+    throw new Error(
+      "Faltan las variables de entorno de Supabase.",
+    )
   }
 
   return createClient(url, secretKey, {
@@ -30,6 +33,38 @@ function obtenerSupabaseAdmin() {
       autoRefreshToken: false,
     },
   })
+}
+
+function crearTokenAdmin(password: string) {
+  return createHash("sha256")
+    .update(password)
+    .digest("hex")
+}
+
+async function adminAutorizado() {
+  const cookieStore = await cookies()
+
+  const sesion =
+    cookieStore.get(COOKIE_ADMIN)?.value
+
+  const password =
+    process.env.RENACLI_ADMIN_PASSWORD
+
+  if (!sesion || !password) {
+    return false
+  }
+
+  const esperado =
+    crearTokenAdmin(password)
+
+  const a = Buffer.from(sesion)
+  const b = Buffer.from(esperado)
+
+  if (a.length !== b.length) {
+    return false
+  }
+
+  return timingSafeEqual(a, b)
 }
 
 function formatearFecha(fecha: string | null) {
@@ -48,15 +83,23 @@ function obtenerEstadoEfectivo(
   estadoOriginal: string | null,
   fechaVencimiento: string | null,
 ) {
-  const estadoNormalizado = (estadoOriginal || "vigente")
+  const estadoNormalizado = (
+    estadoOriginal || "vigente"
+  )
     .trim()
     .toLowerCase()
 
-  if (estadoNormalizado !== "vigente" || !fechaVencimiento) {
+  if (
+    estadoNormalizado !== "vigente" ||
+    !fechaVencimiento
+  ) {
     return estadoNormalizado
   }
 
-  const partes = fechaVencimiento.substring(0, 10).split("-")
+  const partes =
+    fechaVencimiento
+      .substring(0, 10)
+      .split("-")
 
   if (partes.length !== 3) {
     return estadoNormalizado
@@ -82,7 +125,11 @@ function obtenerEstadoEfectivo(
     ahora.getDate(),
   )
 
-  const vencimientoUTC = Date.UTC(anio, mes - 1, dia)
+  const vencimientoUTC = Date.UTC(
+    anio,
+    mes - 1,
+    dia,
+  )
 
   if (vencimientoUTC < hoyUTC) {
     return "vencida"
@@ -94,7 +141,9 @@ function obtenerEstadoEfectivo(
 function normalizarCategoria(
   categoria: string | null,
 ): CategoriaTecnica {
-  const valor = (categoria || "base")
+  const valor = (
+    categoria || "base"
+  )
     .trim()
     .toLowerCase()
 
@@ -165,10 +214,10 @@ function obtenerConfiguracionCategoria(
 export default async function CarnetPage({
   params,
 }: PageProps) {
-  const cookieStore = await cookies()
-  const sesion = cookieStore.get(COOKIE_ADMIN)?.value
+  const autorizado =
+    await adminAutorizado()
 
-  if (!sesion) {
+  if (!autorizado) {
     redirect("/administrador")
   }
 
@@ -182,7 +231,8 @@ export default async function CarnetPage({
     notFound()
   }
 
-  const supabase = obtenerSupabaseAdmin()
+  const supabase =
+    obtenerSupabaseAdmin()
 
   const {
     data: matriculado,
@@ -209,7 +259,8 @@ export default async function CarnetPage({
   } = await supabase.rpc(
     "obtener_codigo_qr_actual",
     {
-      p_matriculado_id: matriculadoId,
+      p_matriculado_id:
+        matriculadoId,
     },
   )
 
@@ -226,7 +277,10 @@ export default async function CarnetPage({
   } = await supabase
     .from("documentos_pdf_renacli")
     .select("codigo_documento")
-    .eq("matriculado_id", matriculadoId)
+    .eq(
+      "matriculado_id",
+      matriculadoId,
+    )
     .eq("activo", true)
     .order("generado_en", {
       ascending: false,
@@ -235,10 +289,12 @@ export default async function CarnetPage({
     .maybeSingle()
 
   const codigoPdfVigente =
-    pdfVigente?.codigo_documento || null
+    pdfVigente?.codigo_documento ||
+    null
 
   const codigo =
-    codigoData[0].codigo_verificacion as string
+    codigoData[0]
+      .codigo_verificacion as string
 
   const baseUrl = (
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -248,17 +304,19 @@ export default async function CarnetPage({
   const urlVerificacion =
     `${baseUrl}/verificar/${codigo}`
 
-  const qrDataUrl = await QRCode.toDataURL(
-    urlVerificacion,
-    {
-      width: 420,
-      margin: 1,
-      errorCorrectionLevel: "M",
-    },
-  )
+  const qrDataUrl =
+    await QRCode.toDataURL(
+      urlVerificacion,
+      {
+        width: 420,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      },
+    )
 
   const fechaEmisionCredencial =
-    matriculado.fecha_ultima_acreditacion ||
+    matriculado
+      .fecha_ultima_acreditacion ||
     matriculado.fecha_emision
 
   const estadoEfectivo =
@@ -281,7 +339,9 @@ export default async function CarnetPage({
     )
 
   const estiloCategoria =
-    obtenerConfiguracionCategoria(categoria)
+    obtenerConfiguracionCategoria(
+      categoria,
+    )
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950">
@@ -295,7 +355,9 @@ export default async function CarnetPage({
           </a>
 
           <BotonPdfCarnet
-            matriculadoId={matriculadoId}
+            matriculadoId={
+              matriculadoId
+            }
             numeroMatricula={
               matriculado.numero_matricula
             }
@@ -323,7 +385,9 @@ export default async function CarnetPage({
                   </h1>
 
                   <p className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-600">
-                    Registro Nacional de Climatización y Refrigeración
+                    Registro Nacional de
+                    Climatización y
+                    Refrigeración
                   </p>
                 </div>
               </div>
@@ -331,7 +395,8 @@ export default async function CarnetPage({
               <div
                 className={`rounded-full border px-4 py-2 text-sm font-black tracking-wider ${estiloCategoria.insignia}`}
               >
-                CATEGORÍA {estiloCategoria.nombre}
+                CATEGORÍA{" "}
+                {estiloCategoria.nombre}
               </div>
             </div>
           </header>
@@ -341,27 +406,35 @@ export default async function CarnetPage({
               <p
                 className={`text-xs font-bold uppercase tracking-widest ${estiloCategoria.subtitulo}`}
               >
-                Credencial de técnico matriculado
+                Credencial de técnico
+                matriculado
               </p>
 
               <h2 className="mt-3 text-3xl font-black">
-                {matriculado.apellido_nombre}
+                {
+                  matriculado
+                    .apellido_nombre
+                }
               </h2>
 
               <div
                 className={`mt-5 rounded-xl border px-4 py-3 text-sm font-semibold leading-relaxed ${estiloCategoria.insignia}`}
               >
                 <span className="font-black">
-                  Categoría {estiloCategoria.nombre}:
+                  Categoría{" "}
+                  {estiloCategoria.nombre}:
                 </span>{" "}
-                {estiloCategoria.descripcion}
+                {
+                  estiloCategoria.descripcion
+                }
               </div>
 
               <div className="mt-7 grid gap-5 sm:grid-cols-2">
                 <Dato
                   titulo="Matrícula"
                   valor={
-                    matriculado.numero_matricula
+                    matriculado
+                      .numero_matricula
                   }
                   destacado
                   destacadoClass={
@@ -378,9 +451,7 @@ export default async function CarnetPage({
 
                 <Dato
                   titulo="Estado"
-                  valor={
-                    estadoEfectivo.toUpperCase()
-                  }
+                  valor={estadoEfectivo.toUpperCase()}
                 />
 
                 <Dato
@@ -414,14 +485,17 @@ export default async function CarnetPage({
                 <Dato
                   titulo="Vencimiento"
                   valor={formatearFecha(
-                    matriculado.fecha_vencimiento,
+                    matriculado
+                      .fecha_vencimiento,
                   )}
                 />
 
                 {matriculado.telefono ? (
                   <Dato
                     titulo="Teléfono"
-                    valor={matriculado.telefono}
+                    valor={
+                      matriculado.telefono
+                    }
                   />
                 ) : null}
               </div>
@@ -449,7 +523,8 @@ export default async function CarnetPage({
               </div>
 
               <p className="mt-3 text-center text-xs font-semibold text-slate-600">
-                Escanee para verificar la matrícula
+                Escanee para verificar
+                la matrícula
               </p>
             </aside>
           </div>
@@ -460,11 +535,17 @@ export default async function CarnetPage({
             <p
               className={`text-sm font-bold ${estiloCategoria.footerTitulo}`}
             >
-              RENACLI · Registro Nacional de Climatización y Refrigeración
+              RENACLI · Registro
+              Nacional de
+              Climatización y
+              Refrigeración
             </p>
 
             <p className="mt-1 text-xs text-slate-600">
-              La autenticidad de esta credencial se verifica mediante su código QR único.
+              La autenticidad de esta
+              credencial se verifica
+              mediante su código QR
+              único.
             </p>
           </footer>
         </section>
@@ -477,7 +558,8 @@ function Dato({
   titulo,
   valor,
   destacado = false,
-  destacadoClass = "text-blue-950",
+  destacadoClass =
+    "text-blue-950",
 }: {
   titulo: string
   valor: string
