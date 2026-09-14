@@ -826,14 +826,34 @@ export default async function PreguntasPage({
             {preguntas.length}
           </h3>
 
-          <a
-            href="/administrador/evaluaciones"
-            style={
-              botonBlanco
-            }
+          <div
+            style={{
+              display:
+                "flex",
+              gap:
+                "10px",
+              flexWrap:
+                "wrap",
+            }}
           >
-            Volver a evaluaciones
-          </a>
+            <a
+              href="/administrador/evaluaciones/preguntas/nueva"
+              style={
+                botonVerde
+              }
+            >
+              Nueva pregunta
+            </a>
+
+            <a
+              href="/administrador/evaluaciones"
+              style={
+                botonBlanco
+              }
+            >
+              Volver a evaluaciones
+            </a>
+          </div>
         </div>
 
         <div
@@ -963,6 +983,14 @@ export default async function PreguntasPage({
                               : "gris"
                         }
                       />
+                      <a
+                        href={`/administrador/evaluaciones/preguntas/${pregunta.id}`}
+                        style={
+                          botonEditar
+                        }
+                      >
+                        Editar
+                      </a>
                     </div>
                   </div>
 
@@ -1335,6 +1363,46 @@ const botonAzul = {
     "pointer",
 }
 
+
+const botonVerde = {
+  padding:
+    "11px 17px",
+  border:
+    "none",
+  borderRadius:
+    "8px",
+  background:
+    "#15803d",
+  color:
+    "white",
+  fontWeight:
+    "bold",
+  textDecoration:
+    "none",
+  cursor:
+    "pointer",
+}
+
+const botonEditar = {
+  padding:
+    "6px 10px",
+  border:
+    "1px solid #0d5689",
+  borderRadius:
+    "8px",
+  background:
+    "#0d5689",
+  color:
+    "white",
+  fontSize:
+    "11px",
+  fontWeight:
+    "bold",
+  textDecoration:
+    "none",
+  cursor:
+    "pointer",
+}
 const botonBlanco = {
   padding:
     "11px 17px",
