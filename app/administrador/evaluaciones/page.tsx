@@ -46,6 +46,24 @@ type ConfiguracionBucket = {
   cantidad_preguntas: number
 }
 
+type EvaluacionReciente = {
+  id: number
+  codigo: string
+  matriculado_id: number | null
+  numero_matricula_snapshot: string | null
+  apellido_nombre_snapshot: string | null
+  estado: string
+  total_preguntas: number
+  respuestas_correctas: number | null
+  respuestas_incorrectas: number | null
+  porcentaje: number | string | null
+  aprobado: boolean | null
+  preguntas_criticas_total: number
+  preguntas_criticas_correctas: number | null
+  fecha_generacion: string
+  fecha_finalizacion: string | null
+}
+
 type Props = {
   searchParams?: Promise<{
     q?: string
@@ -201,6 +219,79 @@ async function obtenerConfiguracionGeneral():
   }
 
   return data as ConfiguracionEvaluacion
+}
+
+async function obtenerUltimasEvaluaciones():
+  Promise<EvaluacionReciente[]> {
+  const supabase =
+    obtenerSupabaseAdmin()
+
+  const { data, error } =
+    await supabase
+      .from("evaluaciones")
+      .select(
+        `
+          id,
+          codigo,
+          matriculado_id,
+          numero_matricula_snapshot,
+          apellido_nombre_snapshot,
+          estado,
+          total_preguntas,
+          respuestas_correctas,
+          respuestas_incorrectas,
+          porcentaje,
+          aprobado,
+          preguntas_criticas_total,
+          preguntas_criticas_correctas,
+          fecha_generacion,
+          fecha_finalizacion
+        `
+      )
+      .order(
+        "fecha_generacion",
+        {
+          ascending: false,
+        }
+      )
+      .limit(20)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error obteniendo últimas evaluaciones:",
+      error
+    )
+
+    return []
+  }
+
+  return (
+    data ?? []
+  ) as EvaluacionReciente[]
+}
+
+function formatearFechaHora(
+  fecha: string | null
+) {
+  if (!fecha) {
+    return "-"
+  }
+
+  try {
+    return new Intl.DateTimeFormat(
+      "es-AR",
+      {
+        timeZone:
+          "America/Argentina/Buenos_Aires",
+        dateStyle: "short",
+        timeStyle: "short",
+      }
+    ).format(
+      new Date(fecha)
+    )
+  } catch {
+    return fecha
+  }
 }
 
 async function buscarMatriculados(
@@ -1173,6 +1264,7 @@ export default async function EvaluacionesPage({
     resumen,
     configuracion,
     resultados,
+    ultimasEvaluaciones,
   ] = await Promise.all([
     obtenerResumenEvaluaciones(),
     obtenerConfiguracionGeneral(),
@@ -1181,6 +1273,7 @@ export default async function EvaluacionesPage({
           terminoBusqueda
         )
       : Promise.resolve([]),
+    obtenerUltimasEvaluaciones(),
   ])
 
   const errorVisible =
@@ -1605,6 +1698,338 @@ export default async function EvaluacionesPage({
                     )
                   )}
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: "28px",
+            padding: "24px",
+            background: "white",
+            border:
+              "1px solid #d7e0e7",
+            borderRadius: "14px",
+            boxShadow:
+              "0 2px 5px rgba(0,0,0,.08)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  color: "#172033",
+                }}
+              >
+                Últimas evaluaciones
+              </h3>
+
+              <p
+                style={{
+                  margin:
+                    "7px 0 0",
+                  color:
+                    "#64748b",
+                  fontSize:
+                    "14px",
+                  lineHeight:
+                    1.5,
+                }}
+              >
+                Acceso directo a las últimas 20 evaluaciones generadas.
+              </p>
+            </div>
+
+            <div
+              style={{
+                color:
+                  "#64748b",
+                fontSize:
+                  "13px",
+                fontWeight:
+                  "bold",
+              }}
+            >
+              {ultimasEvaluaciones.length} visibles
+            </div>
+          </div>
+
+          {ultimasEvaluaciones.length ===
+          0 ? (
+            <p
+              style={{
+                marginBottom: 0,
+                color: "#64748b",
+              }}
+            >
+              Todavía no hay evaluaciones generadas.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: "12px",
+                marginTop: "20px",
+              }}
+            >
+              {ultimasEvaluaciones.map(
+                evaluacion => {
+                  const finalizada =
+                    evaluacion.estado ===
+                    "finalizada"
+
+                  const resultadoTexto =
+                    finalizada
+                      ? evaluacion.aprobado
+                        ? "APROBADO"
+                        : "NO APROBADO"
+                      : "PENDIENTE DE CORRECCIÓN"
+
+                  const resultadoColor =
+                    finalizada
+                      ? evaluacion.aprobado
+                        ? "#166534"
+                        : "#be123c"
+                      : "#92400e"
+
+                  const resultadoFondo =
+                    finalizada
+                      ? evaluacion.aprobado
+                        ? "#ecfdf5"
+                        : "#fff1f2"
+                      : "#fffbeb"
+
+                  const resultadoBorde =
+                    finalizada
+                      ? evaluacion.aprobado
+                        ? "#86efac"
+                        : "#fecdd3"
+                      : "#fde68a"
+
+                  const porcentaje =
+                    evaluacion.porcentaje ===
+                      null ||
+                    evaluacion.porcentaje ===
+                      undefined
+                      ? null
+                      : Number(
+                          evaluacion.porcentaje
+                        )
+
+                  return (
+                    <div
+                      key={
+                        evaluacion.id
+                      }
+                      style={{
+                        padding:
+                          "18px",
+                        border:
+                          "1px solid #e2e8f0",
+                        borderRadius:
+                          "12px",
+                        background:
+                          "#f8fafc",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display:
+                            "flex",
+                          alignItems:
+                            "flex-start",
+                          justifyContent:
+                            "space-between",
+                          gap:
+                            "16px",
+                          flexWrap:
+                            "wrap",
+                        }}
+                      >
+                        <div
+                          style={{
+                            flex:
+                              "1 1 360px",
+                            minWidth:
+                              "240px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              gap:
+                                "10px",
+                              flexWrap:
+                                "wrap",
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color:
+                                  "#172033",
+                                fontSize:
+                                  "16px",
+                              }}
+                            >
+                              {evaluacion.apellido_nombre_snapshot ||
+                                "Sin nombre"}
+                            </strong>
+
+                            <span
+                              style={{
+                                padding:
+                                  "5px 9px",
+                                borderRadius:
+                                  "999px",
+                                border:
+                                  `1px solid ${resultadoBorde}`,
+                                background:
+                                  resultadoFondo,
+                                color:
+                                  resultadoColor,
+                                fontSize:
+                                  "11px",
+                                fontWeight:
+                                  "bold",
+                              }}
+                            >
+                              {resultadoTexto}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop:
+                                "7px",
+                              color:
+                                "#475569",
+                              fontSize:
+                                "14px",
+                              lineHeight:
+                                1.55,
+                            }}
+                          >
+                            {evaluacion.numero_matricula_snapshot ||
+                              "SIN MATRÍCULA"}
+                            {" · "}
+                            <strong>
+                              {
+                                evaluacion.codigo
+                              }
+                            </strong>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop:
+                                "5px",
+                              color:
+                                "#64748b",
+                              fontSize:
+                                "12px",
+                              lineHeight:
+                                1.5,
+                            }}
+                          >
+                            Generada:{" "}
+                            {formatearFechaHora(
+                              evaluacion.fecha_generacion
+                            )}
+                          </div>
+
+                          {finalizada && (
+                            <div
+                              style={{
+                                marginTop:
+                                  "7px",
+                                color:
+                                  "#475569",
+                                fontSize:
+                                  "13px",
+                                lineHeight:
+                                  1.5,
+                              }}
+                            >
+                              {evaluacion.respuestas_correctas ??
+                                0}{" "}
+                              correctas ·{" "}
+                              {evaluacion.respuestas_incorrectas ??
+                                0}{" "}
+                              incorrectas
+                              {porcentaje !==
+                                null &&
+                              Number.isFinite(
+                                porcentaje
+                              )
+                                ? ` · ${porcentaje.toFixed(
+                                    2
+                                  )} %`
+                                : ""}
+                              {" · "}
+                              {evaluacion.preguntas_criticas_correctas ??
+                                0}{" "}
+                              de{" "}
+                              {
+                                evaluacion.preguntas_criticas_total
+                              }{" "}
+                              críticas
+                            </div>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display:
+                              "flex",
+                            gap:
+                              "10px",
+                            flexWrap:
+                              "wrap",
+                          }}
+                        >
+                          <a
+                            href={`/api/evaluacion-pdf/${encodeURIComponent(
+                              evaluacion.codigo
+                            )}`}
+                            style={
+                              botonAzul
+                            }
+                          >
+                            Descargar PDF
+                          </a>
+
+                          <a
+                            href={`/administrador/evaluaciones/${encodeURIComponent(
+                              evaluacion.codigo
+                            )}`}
+                            style={
+                              finalizada
+                                ? botonBlanco
+                                : botonVerde
+                            }
+                          >
+                            {finalizada
+                              ? "Ver resultado"
+                              : "Corregir"}
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
               )}
             </div>
           )}
