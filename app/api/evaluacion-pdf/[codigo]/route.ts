@@ -19,7 +19,6 @@ export const runtime = "nodejs"
 const COOKIE_ADMIN =
   "renacli_admin_session"
 
-const CANTIDAD_MARCADORES = 4
 
 const PALABRAS_CONTROL = [
   "psicrometria",
@@ -382,7 +381,9 @@ async function obtenerOCrearMarcadores(
   evaluacion:
     Evaluacion,
   items:
-    EvaluacionItem[]
+    EvaluacionItem[],
+  cantidadMarcadores:
+    number
 ) {
   const supabase =
     obtenerSupabaseAdmin()
@@ -448,7 +449,7 @@ async function obtenerOCrearMarcadores(
 
   if (
     mapa.size >=
-    CANTIDAD_MARCADORES
+    cantidadMarcadores
   ) {
     return mapa
   }
@@ -621,10 +622,11 @@ async function obtenerOCrearMarcadores(
     )
 
   /*
-   * Priorizamos 3 preguntas críticas
-   * y luego una pregunta adicional.
-   * Si el banco seleccionado no lo
-   * permite, completamos con otras.
+   * Priorizamos hasta 3 preguntas críticas
+   * y luego completamos hasta alcanzar la
+   * cantidad de marcadores configurada.
+   * Si el banco seleccionado no lo permite,
+   * completamos con otras preguntas.
    */
   const candidatos = [
     ...criticasPermitidas.slice(
@@ -655,7 +657,7 @@ async function obtenerOCrearMarcadores(
     if (
       mapa.size +
         nuevos.length >=
-      CANTIDAD_MARCADORES
+      cantidadMarcadores
     ) {
       break
     }
@@ -710,10 +712,10 @@ async function obtenerOCrearMarcadores(
   if (
     mapa.size +
       nuevos.length <
-    CANTIDAD_MARCADORES
+    cantidadMarcadores
   ) {
     throw new Error(
-      "No fue posible asignar los cuatro marcadores ocultos."
+      `No fue posible asignar los ${cantidadMarcadores} marcadores ocultos configurados.`
     )
   }
 
@@ -1534,10 +1536,36 @@ export async function GET(
       )
     }
 
+    const cantidadMarcadores =
+      Number(
+        configuracion
+          .marcadores_ocultos_cantidad
+      )
+
+    if (
+      !Number.isInteger(
+        cantidadMarcadores
+      ) ||
+      cantidadMarcadores < 0 ||
+      cantidadMarcadores >
+        items.length
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La cantidad de marcadores ocultos configurada no es válida.",
+        },
+        {
+          status: 500,
+        }
+      )
+    }
+
     const marcadores =
       await obtenerOCrearMarcadores(
         evaluacion,
-        items
+        items,
+        cantidadMarcadores
       )
 
     const pdf =
