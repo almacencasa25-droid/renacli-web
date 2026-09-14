@@ -991,88 +991,6 @@ async function generarEvaluacion(
       seleccionadas
     )
 
-  let evaluacionCreada:
-    {
-      id: number
-      codigo: string
-    } | null = null
-
-  for (
-    let intento = 0;
-    intento < 10;
-    intento++
-  ) {
-    const codigo =
-      generarCodigoEvaluacion()
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("evaluaciones")
-      .insert({
-        codigo,
-        matriculado_id:
-          matriculado.id,
-        numero_matricula_snapshot:
-          matriculado.numero_matricula,
-        apellido_nombre_snapshot:
-          matriculado.apellido_nombre,
-        tipo_evaluacion:
-          "general",
-        estado:
-          "generada",
-        total_preguntas:
-          configuracion.total_preguntas,
-        preguntas_criticas_total:
-          configuracion.preguntas_criticas_total,
-      })
-      .select(
-        "id, codigo"
-      )
-      .single()
-
-    if (
-      !error &&
-      data
-    ) {
-      evaluacionCreada = {
-        id:
-          Number(
-            data.id
-          ),
-        codigo:
-          String(
-            data.codigo
-          ),
-      }
-
-      break
-    }
-
-    if (
-      error?.code !==
-      "23505"
-    ) {
-      console.error(
-        "[RENACLI] Error creando evaluación:",
-        error
-      )
-
-      break
-    }
-  }
-
-  if (
-    !evaluacionCreada
-  ) {
-    redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=guardar`
-    )
-  }
-
   const items =
     seleccionFinal.map(
       (
@@ -1132,8 +1050,6 @@ async function generarEvaluacion(
         }
 
         return {
-          evaluacion_id:
-            evaluacionCreada!.id,
           pregunta_id:
             pregunta.id,
           orden:
@@ -1166,28 +1082,109 @@ async function generarEvaluacion(
       }
     )
 
-  const {
-    error: errorItems,
-  } = await supabase
-    .from(
-      "evaluacion_items"
-    )
-    .insert(items)
+  let evaluacionCreada:
+    {
+      id: number
+      codigo: string
+    } | null = null
 
-  if (errorItems) {
-    console.error(
-      "[RENACLI] Error guardando preguntas de evaluación:",
-      errorItems
+  for (
+    let intento = 0;
+    intento < 10;
+    intento++
+  ) {
+    const codigo =
+      generarCodigoEvaluacion()
+
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "crear_evaluacion_completa",
+      {
+        p_codigo:
+          codigo,
+        p_matriculado_id:
+          matriculado.id,
+        p_numero_matricula_snapshot:
+          matriculado.numero_matricula,
+        p_apellido_nombre_snapshot:
+          matriculado.apellido_nombre,
+        p_tipo_evaluacion:
+          "general",
+        p_total_preguntas:
+          Number(
+            configuracion.total_preguntas
+          ),
+        p_preguntas_criticas_total:
+          Number(
+            configuracion.preguntas_criticas_total
+          ),
+        p_items:
+          items,
+      }
     )
 
-    await supabase
-      .from("evaluaciones")
-      .delete()
-      .eq(
-        "id",
-        evaluacionCreada.id
+    if (
+      !error &&
+      Array.isArray(data) &&
+      data.length > 0
+    ) {
+      const resultado =
+        data[0]
+
+      const evaluacionId =
+        Number(
+          resultado.evaluacion_id
+        )
+
+      const codigoCreado =
+        String(
+          resultado.codigo_evaluacion ??
+            ""
+        )
+
+      if (
+        Number.isInteger(
+          evaluacionId
+        ) &&
+        evaluacionId > 0 &&
+        codigoCreado
+      ) {
+        evaluacionCreada = {
+          id:
+            evaluacionId,
+          codigo:
+            codigoCreado,
+        }
+
+        break
+      }
+
+      console.error(
+        "[RENACLI] La función transaccional devolvió un resultado inválido:",
+        resultado
       )
 
+      break
+    }
+
+    if (
+      error?.code !==
+      "23505"
+    ) {
+      console.error(
+        "[RENACLI] Error creando evaluación completa:",
+        error
+      )
+
+      break
+    }
+  }
+
+  if (
+    !evaluacionCreada
+  ) {
     redirect(
       `/administrador/evaluaciones?q=${encodeURIComponent(
         q
