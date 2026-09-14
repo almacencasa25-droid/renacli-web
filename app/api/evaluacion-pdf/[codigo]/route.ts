@@ -57,7 +57,9 @@ type Evaluacion = {
   id: number
   codigo: string
   matriculado_id: number | null
+  consulta_id: number | null
   numero_matricula_snapshot: string | null
+  numero_tramite_snapshot: string | null
   apellido_nombre_snapshot: string | null
   tipo_evaluacion: string
   estado: string
@@ -876,8 +878,31 @@ function dibujarEncabezado(
   let y =
     height - 91
 
+  const esAspirante =
+    Boolean(
+      evaluacion.consulta_id ||
+      evaluacion.numero_tramite_snapshot
+    )
+
+  const etiquetaPersona =
+    esAspirante
+      ? "ASPIRANTE"
+      : "TECNICO"
+
+  const etiquetaReferencia =
+    esAspirante
+      ? "TRAMITE"
+      : "MATRICULA"
+
+  const valorReferencia =
+    esAspirante
+      ? evaluacion.numero_tramite_snapshot ||
+        "Sin tramite"
+      : evaluacion.numero_matricula_snapshot ||
+        "Sin matricula"
+
   page.drawText(
-    "TECNICO",
+    etiquetaPersona,
     {
       x: 42,
       y,
@@ -903,7 +928,7 @@ function dibujarEncabezado(
   )
 
   page.drawText(
-    "MATRICULA",
+    etiquetaReferencia,
     {
       x: 360,
       y,
@@ -915,9 +940,7 @@ function dibujarEncabezado(
 
   page.drawText(
     textoSeguroPdf(
-      evaluacion
-        .numero_matricula_snapshot ||
-        "Sin matricula"
+      valorReferencia
     ),
     {
       x: 360,
@@ -1387,7 +1410,9 @@ export async function GET(
           id,
           codigo,
           matriculado_id,
+          consulta_id,
           numero_matricula_snapshot,
+          numero_tramite_snapshot,
           apellido_nombre_snapshot,
           tipo_evaluacion,
           estado,
@@ -1591,14 +1616,37 @@ export async function GET(
       "RENACLI"
     )
 
-    pdf.setKeywords([
+    const keywords = [
       "RENACLI",
       "evaluacion",
       evaluacion.codigo,
+    ]
+
+    if (
       evaluacion
-        .numero_matricula_snapshot ??
-        "",
-    ])
+        .numero_matricula_snapshot
+        ?.trim()
+    ) {
+      keywords.push(
+        evaluacion
+          .numero_matricula_snapshot
+      )
+    }
+
+    if (
+      evaluacion
+        .numero_tramite_snapshot
+        ?.trim()
+    ) {
+      keywords.push(
+        evaluacion
+          .numero_tramite_snapshot
+      )
+    }
+
+    pdf.setKeywords(
+      keywords
+    )
 
     const fontRegular =
       await pdf.embedFont(
