@@ -1360,6 +1360,30 @@ export default async function EvaluacionesPage({
           resultados.
         </p>
 
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginTop: "20px",
+            marginBottom: "4px",
+          }}
+        >
+          <a
+            href="/administrador/evaluaciones/preguntas"
+            style={botonAzul}
+          >
+            Banco de preguntas
+          </a>
+
+          <a
+            href="/administrador/evaluaciones/preguntas/nueva"
+            style={botonVerde}
+          >
+            Nueva pregunta
+          </a>
+        </div>
+
         {parametros.generado ===
           "1" &&
           parametros.codigo && (
