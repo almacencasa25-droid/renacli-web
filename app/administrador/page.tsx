@@ -4110,6 +4110,13 @@ export default async function AdministradorPage({
                     >
                       Comunicaciones y calificaciones
                     </a>
+
+                    <a
+                      href="/administrador/evaluaciones"
+                      style={botonBlanco}
+                    >
+                      Evaluaciones RENACLI
+                    </a>
                   </div>
                 </div>
 
