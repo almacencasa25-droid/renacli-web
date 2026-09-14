@@ -1270,10 +1270,28 @@ export default async function EvaluacionesPage({
         {parametros.generado ===
           "1" &&
           parametros.codigo && (
-            <Aviso
-              tipo="ok"
-              texto={`Evaluación generada correctamente. Código: ${parametros.codigo}`}
-            />
+            <>
+              <Aviso
+                tipo="ok"
+                texto={`Evaluación generada correctamente. Código: ${parametros.codigo}`}
+              />
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  marginBottom: "4px",
+                }}
+              >
+                <a
+                  href={`/api/evaluacion-pdf/${encodeURIComponent(
+                    parametros.codigo
+                  )}`}
+                  style={botonAzul}
+                >
+                  Descargar PDF
+                </a>
+              </div>
+            </>
           )}
 
         {errorVisible && (
