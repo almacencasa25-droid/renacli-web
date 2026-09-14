@@ -13,6 +13,17 @@ type MatriculadoEvaluacion = {
   estado: string | null
 }
 
+type TramiteEvaluacion = {
+  id: number
+  numero_tramite: string | null
+  nombre: string
+  email: string
+  telefono: string | null
+  motivo: string
+  estado: string
+  created_at: string
+}
+
 type PreguntaBanco = {
   id: number
   enunciado: string
@@ -50,7 +61,9 @@ type EvaluacionReciente = {
   id: number
   codigo: string
   matriculado_id: number | null
+  consulta_id: number | null
   numero_matricula_snapshot: string | null
+  numero_tramite_snapshot: string | null
   apellido_nombre_snapshot: string | null
   estado: string
   total_preguntas: number
@@ -67,6 +80,7 @@ type EvaluacionReciente = {
 type Props = {
   searchParams?: Promise<{
     q?: string
+    tramite?: string
     generado?: string
     codigo?: string
     error?: string
@@ -234,7 +248,9 @@ async function obtenerUltimasEvaluaciones():
           id,
           codigo,
           matriculado_id,
+          consulta_id,
           numero_matricula_snapshot,
+          numero_tramite_snapshot,
           apellido_nombre_snapshot,
           estado,
           total_preguntas,
@@ -350,6 +366,70 @@ async function buscarMatriculados(
   ) as MatriculadoEvaluacion[]
 }
 
+async function buscarTramites(
+  termino: string
+): Promise<TramiteEvaluacion[]> {
+  const busqueda =
+    termino.trim()
+
+  if (!busqueda) {
+    return []
+  }
+
+  const terminoSeguro =
+    busqueda
+      .replace(/,/g, "")
+      .replace(/\(/g, "")
+      .replace(/\)/g, "")
+
+  const supabase =
+    obtenerSupabaseAdmin()
+
+  const { data, error } =
+    await supabase
+      .from("consultas_contacto")
+      .select(
+        `
+          id,
+          numero_tramite,
+          nombre,
+          email,
+          telefono,
+          motivo,
+          estado,
+          created_at
+        `
+      )
+      .not(
+        "numero_tramite",
+        "is",
+        null
+      )
+      .or(
+        `numero_tramite.ilike.%${terminoSeguro}%,nombre.ilike.%${terminoSeguro}%`
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      )
+      .limit(30)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error buscando trámites para evaluación:",
+      error
+    )
+
+    return []
+  }
+
+  return (
+    data ?? []
+  ) as TramiteEvaluacion[]
+}
+
 function mezclar<T>(
   elementos: T[]
 ): T[] {
@@ -424,21 +504,45 @@ function generarCodigoEvaluacion() {
 }
 
 async function obtenerPreguntasRecientes(
-  matriculadoId: number
+  origen: {
+    matriculadoId?: number | null
+    consultaId?: number | null
+  }
 ) {
   const supabase =
     obtenerSupabaseAdmin()
 
+  let consultaEvaluaciones =
+    supabase
+      .from("evaluaciones")
+      .select("id")
+
+  if (
+    origen.consultaId &&
+    origen.consultaId > 0
+  ) {
+    consultaEvaluaciones =
+      consultaEvaluaciones.eq(
+        "consulta_id",
+        origen.consultaId
+      )
+  } else if (
+    origen.matriculadoId &&
+    origen.matriculadoId > 0
+  ) {
+    consultaEvaluaciones =
+      consultaEvaluaciones.eq(
+        "matriculado_id",
+        origen.matriculadoId
+      )
+  } else {
+    return new Set<number>()
+  }
+
   const {
     data: evaluacionesAnteriores,
     error: errorEvaluaciones,
-  } = await supabase
-    .from("evaluaciones")
-    .select("id")
-    .eq(
-      "matriculado_id",
-      matriculadoId
-    )
+  } = await consultaEvaluaciones
     .order(
       "fecha_generacion",
       {
@@ -518,56 +622,148 @@ async function generarEvaluacion(
       ) ?? 0
     )
 
+  const consultaId =
+    Number(
+      formData.get(
+        "consulta_id"
+      ) ?? 0
+    )
+
   const q =
     String(
       formData.get("q") ?? ""
     ).trim()
 
-  if (
-    !Number.isInteger(
+  const tramiteBusqueda =
+    String(
+      formData.get("tramite") ?? ""
+    ).trim()
+
+  const esMatriculado =
+    Number.isInteger(
       matriculadoId
-    ) ||
-    matriculadoId <= 0
+    ) &&
+    matriculadoId > 0
+
+  const esTramite =
+    Number.isInteger(
+      consultaId
+    ) &&
+    consultaId > 0
+
+  const parametroRetorno =
+    esTramite || tramiteBusqueda
+      ? `tramite=${encodeURIComponent(
+          tramiteBusqueda
+        )}`
+      : q
+        ? `q=${encodeURIComponent(
+            q
+          )}`
+        : ""
+
+  const rutaRetorno = (
+    parametros: string
+  ) =>
+    `/administrador/evaluaciones?${
+      parametroRetorno
+        ? `${parametroRetorno}&`
+        : ""
+    }${parametros}`
+
+  if (
+    esMatriculado === esTramite
   ) {
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=matriculado`
+      rutaRetorno(
+        "error=origen"
+      )
     )
   }
 
   const supabase =
     obtenerSupabaseAdmin()
 
-  const {
-    data: matriculado,
-    error: errorMatriculado,
-  } = await supabase
-    .from("matriculados")
-    .select(
-      `
-        id,
-        numero_matricula,
-        apellido_nombre,
-        dni,
-        estado
-      `
-    )
-    .eq(
-      "id",
-      matriculadoId
-    )
-    .maybeSingle()
+  let matriculado:
+    MatriculadoEvaluacion | null =
+      null
 
-  if (
-    errorMatriculado ||
-    !matriculado
-  ) {
-    redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=matriculado`
-    )
+  let tramiteOrigen:
+    TramiteEvaluacion | null =
+      null
+
+  if (esMatriculado) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("matriculados")
+      .select(
+        `
+          id,
+          numero_matricula,
+          apellido_nombre,
+          dni,
+          estado
+        `
+      )
+      .eq(
+        "id",
+        matriculadoId
+      )
+      .maybeSingle()
+
+    if (
+      error ||
+      !data
+    ) {
+      redirect(
+        rutaRetorno(
+          "error=matriculado"
+        )
+      )
+    }
+
+    matriculado =
+      data as MatriculadoEvaluacion
+  } else {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("consultas_contacto")
+      .select(
+        `
+          id,
+          numero_tramite,
+          nombre,
+          email,
+          telefono,
+          motivo,
+          estado,
+          created_at
+        `
+      )
+      .eq(
+        "id",
+        consultaId
+      )
+      .maybeSingle()
+
+    if (
+      error ||
+      !data ||
+      !data.numero_tramite
+    ) {
+      redirect(
+        rutaRetorno(
+          "error=tramite"
+        )
+      )
+    }
+
+    tramiteOrigen =
+      data as TramiteEvaluacion
   }
 
   const {
@@ -610,9 +806,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=config`
+      rutaRetorno("error=config")
     )
   }
 
@@ -646,9 +840,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=config`
+      rutaRetorno("error=config")
     )
   }
 
@@ -692,9 +884,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=config`
+      rutaRetorno("error=config")
     )
   }
 
@@ -736,9 +926,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=banco`
+      rutaRetorno("error=banco")
     )
   }
 
@@ -746,9 +934,12 @@ async function generarEvaluacion(
     preguntas as PreguntaBanco[]
 
   const usadasRecientemente =
-    await obtenerPreguntasRecientes(
-      matriculadoId
-    )
+    await obtenerPreguntasRecientes({
+      matriculadoId:
+        matriculado?.id ?? null,
+      consultaId:
+        tramiteOrigen?.id ?? null,
+    })
 
   const informacionBuckets =
     buckets.map(
@@ -817,9 +1008,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=banco`
+      rutaRetorno("error=banco")
     )
   }
 
@@ -861,9 +1050,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=criticas`
+      rutaRetorno("error=criticas")
     )
   }
 
@@ -885,9 +1072,7 @@ async function generarEvaluacion(
       disponibles.length === 0
     ) {
       redirect(
-        `/administrador/evaluaciones?q=${encodeURIComponent(
-          q
-        )}&error=criticas`
+        rutaRetorno("error=criticas")
       )
     }
 
@@ -957,9 +1142,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=banco`
+      rutaRetorno("error=banco")
     )
   }
 
@@ -980,9 +1163,7 @@ async function generarEvaluacion(
     )
 
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=banco`
+      rutaRetorno("error=banco")
     )
   }
 
@@ -1100,16 +1281,14 @@ async function generarEvaluacion(
       data,
       error,
     } = await supabase.rpc(
-      "crear_evaluacion_completa",
+      "crear_evaluacion_completa_v2",
       {
         p_codigo:
           codigo,
         p_matriculado_id:
-          matriculado.id,
-        p_numero_matricula_snapshot:
-          matriculado.numero_matricula,
-        p_apellido_nombre_snapshot:
-          matriculado.apellido_nombre,
+          matriculado?.id ?? null,
+        p_consulta_id:
+          tramiteOrigen?.id ?? null,
         p_tipo_evaluacion:
           "general",
         p_total_preguntas:
@@ -1186,18 +1365,16 @@ async function generarEvaluacion(
     !evaluacionCreada
   ) {
     redirect(
-      `/administrador/evaluaciones?q=${encodeURIComponent(
-        q
-      )}&error=guardar`
+      rutaRetorno("error=guardar")
     )
   }
 
   redirect(
-    `/administrador/evaluaciones?q=${encodeURIComponent(
-      q
-    )}&generado=1&codigo=${encodeURIComponent(
-      evaluacionCreada.codigo
-    )}`
+    rutaRetorno(
+      `generado=1&codigo=${encodeURIComponent(
+        evaluacionCreada.codigo
+      )}`
+    )
   )
 }
 
@@ -1208,6 +1385,18 @@ function mensajeError(
     error === "matriculado"
   ) {
     return "No fue posible identificar al matriculado seleccionado."
+  }
+
+  if (
+    error === "tramite"
+  ) {
+    return "No fue posible identificar el trámite seleccionado o todavía no tiene número de trámite asignado."
+  }
+
+  if (
+    error === "origen"
+  ) {
+    return "La evaluación debe generarse para un trámite o para un matriculado, pero no para ambos al mismo tiempo."
   }
 
   if (
@@ -1257,10 +1446,16 @@ export default async function EvaluacionesPage({
       parametros.q ?? ""
     ).trim()
 
+  const terminoTramite =
+    String(
+      parametros.tramite ?? ""
+    ).trim()
+
   const [
     resumen,
     configuracion,
     resultados,
+    resultadosTramites,
     ultimasEvaluaciones,
   ] = await Promise.all([
     obtenerResumenEvaluaciones(),
@@ -1268,6 +1463,11 @@ export default async function EvaluacionesPage({
     terminoBusqueda
       ? buscarMatriculados(
           terminoBusqueda
+        )
+      : Promise.resolve([]),
+    terminoTramite
+      ? buscarTramites(
+          terminoTramite
         )
       : Promise.resolve([]),
     obtenerUltimasEvaluaciones(),
@@ -1537,6 +1737,210 @@ export default async function EvaluacionesPage({
             padding: "24px",
             background: "white",
             border:
+              "2px solid #35c4cf",
+            borderRadius: "14px",
+            boxShadow:
+              "0 2px 5px rgba(0,0,0,.08)",
+          }}
+        >
+          <h3
+            style={{
+              marginTop: 0,
+              color: "#172033",
+            }}
+          >
+            Nuevo aspirante · Evaluación por trámite
+          </h3>
+
+          <p
+            style={{
+              color: "#475569",
+              lineHeight: 1.55,
+            }}
+          >
+            Buscá el número de trámite del solicitante. La evaluación se genera antes de otorgar la matrícula y queda vinculada al trámite.
+          </p>
+
+          <form
+            method="get"
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginTop: "18px",
+            }}
+          >
+            <input
+              type="text"
+              name="tramite"
+              defaultValue={
+                terminoTramite
+              }
+              placeholder="Ej.: número o código de trámite"
+              required
+              style={{
+                flex: "1 1 300px",
+                minWidth: "220px",
+                padding: "13px",
+                border:
+                  "1px solid #cbd5e1",
+                borderRadius: "8px",
+                boxSizing:
+                  "border-box",
+              }}
+            />
+
+            <button
+              type="submit"
+              style={botonAzul}
+            >
+              Buscar trámite
+            </button>
+          </form>
+
+          {terminoTramite && (
+            <div
+              style={{
+                marginTop: "24px",
+              }}
+            >
+              {resultadosTramites.length ===
+              0 ? (
+                <p
+                  style={{
+                    color: "#64748b",
+                  }}
+                >
+                  No se encontraron trámites con ese número o nombre.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "12px",
+                  }}
+                >
+                  {resultadosTramites.map(
+                    tramite => (
+                      <div
+                        key={
+                          tramite.id
+                        }
+                        style={{
+                          padding:
+                            "18px",
+                          border:
+                            "1px solid #bae6fd",
+                          borderRadius:
+                            "12px",
+                          background:
+                            "#f0f9ff",
+                          display:
+                            "flex",
+                          alignItems:
+                            "center",
+                          justifyContent:
+                            "space-between",
+                          gap: "16px",
+                          flexWrap:
+                            "wrap",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontWeight:
+                                "bold",
+                              color:
+                                "#172033",
+                              fontSize:
+                                "17px",
+                            }}
+                          >
+                            {tramite.nombre}
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop:
+                                "5px",
+                              color:
+                                "#0d4f7c",
+                              fontSize:
+                                "14px",
+                              fontWeight:
+                                "bold",
+                            }}
+                          >
+                            TRÁMITE {tramite.numero_tramite}
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop:
+                                "5px",
+                              color:
+                                "#475569",
+                              fontSize:
+                                "13px",
+                              lineHeight:
+                                1.5,
+                            }}
+                          >
+                            {tramite.motivo}
+                            {" · "}
+                            {tramite.estado}
+                            {tramite.email
+                              ? ` · ${tramite.email}`
+                              : ""}
+                          </div>
+                        </div>
+
+                        <form
+                          action={
+                            generarEvaluacion
+                          }
+                        >
+                          <input
+                            type="hidden"
+                            name="consulta_id"
+                            value={
+                              tramite.id
+                            }
+                          />
+
+                          <input
+                            type="hidden"
+                            name="tramite"
+                            value={
+                              terminoTramite
+                            }
+                          />
+
+                          <button
+                            type="submit"
+                            style={
+                              botonVerde
+                            }
+                          >
+                            Generar evaluación del aspirante
+                          </button>
+                        </form>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: "28px",
+            padding: "24px",
+            background: "white",
+            border:
               "1px solid #d7e0e7",
             borderRadius: "14px",
             boxShadow:
@@ -1549,7 +1953,7 @@ export default async function EvaluacionesPage({
               color: "#172033",
             }}
           >
-            Generar evaluación
+            Técnico ya matriculado
           </h3>
 
           <p
@@ -1558,9 +1962,7 @@ export default async function EvaluacionesPage({
               lineHeight: 1.55,
             }}
           >
-            Buscá al técnico por
-            matrícula, DNI o apellido y
-            nombre.
+            Este acceso conserva el sistema actual para técnicos que ya tienen matrícula. Buscá por matrícula, DNI o apellido y nombre.
           </p>
 
           <form
@@ -1943,8 +2345,10 @@ export default async function EvaluacionesPage({
                                 1.55,
                             }}
                           >
-                            {evaluacion.numero_matricula_snapshot ||
-                              "SIN MATRÍCULA"}
+                            {evaluacion.numero_tramite_snapshot
+                              ? `TRÁMITE ${evaluacion.numero_tramite_snapshot}`
+                              : evaluacion.numero_matricula_snapshot ||
+                                "SIN MATRÍCULA"}
                             {" · "}
                             <strong>
                               {
