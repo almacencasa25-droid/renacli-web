@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import { MessageCircle } from "lucide-react"
+import { Phone } from "lucide-react"
 
 type ConfiguracionPublica = {
   whatsapp: string | null
@@ -101,10 +101,10 @@ export async function WhatsAppFlotante() {
       title="Contactar por WhatsApp"
       className="fixed bottom-5 right-5 z-50 flex size-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 hover:opacity-95 focus:outline-none focus:ring-4 focus:ring-[#25D366]/30 sm:bottom-6 sm:right-6 sm:size-16"
     >
-      <MessageCircle
+      <Phone
         className="size-7 sm:size-8"
         aria-hidden="true"
-        strokeWidth={2.2}
+        strokeWidth={2.4}
       />
     </a>
   )
