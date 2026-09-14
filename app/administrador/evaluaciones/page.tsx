@@ -84,6 +84,9 @@ type Props = {
     generado?: string
     codigo?: string
     error?: string
+    eliminado?: string
+    eliminar?: string
+    confirmar_eliminar?: string
   }>
 }
 
@@ -1378,6 +1381,199 @@ async function generarEvaluacion(
   )
 }
 
+async function eliminarEvaluacion(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const evaluacionId =
+    Number(
+      formData.get(
+        "evaluacion_id"
+      ) ?? 0
+    )
+
+  const q =
+    String(
+      formData.get("q") ?? ""
+    ).trim()
+
+  const tramite =
+    String(
+      formData.get("tramite") ?? ""
+    ).trim()
+
+  const rutaBase =
+    tramite
+      ? `/administrador/evaluaciones?tramite=${encodeURIComponent(
+          tramite
+        )}`
+      : q
+        ? `/administrador/evaluaciones?q=${encodeURIComponent(
+            q
+          )}`
+        : "/administrador/evaluaciones"
+
+  const rutaConParametro = (
+    parametro: string
+  ) =>
+    `${rutaBase}${
+      rutaBase.includes("?")
+        ? "&"
+        : "?"
+    }${parametro}`
+
+  if (
+    !Number.isInteger(
+      evaluacionId
+    ) ||
+    evaluacionId <= 0
+  ) {
+    redirect(
+      rutaConParametro(
+        "error=eliminar"
+      )
+    )
+  }
+
+  const supabase =
+    obtenerSupabaseAdmin()
+
+  const {
+    data: evaluacion,
+    error: errorEvaluacion,
+  } = await supabase
+    .from("evaluaciones")
+    .select(
+      `
+        id,
+        codigo,
+        estado,
+        matriculado_id
+      `
+    )
+    .eq(
+      "id",
+      evaluacionId
+    )
+    .maybeSingle()
+
+  if (
+    errorEvaluacion ||
+    !evaluacion
+  ) {
+    console.error(
+      "[RENACLI] No se pudo identificar la evaluación a eliminar:",
+      errorEvaluacion
+    )
+
+    redirect(
+      rutaConParametro(
+        "error=eliminar"
+      )
+    )
+  }
+
+  const estado =
+    String(
+      evaluacion.estado ?? ""
+    )
+      .trim()
+      .toLowerCase()
+
+  /*
+   * Solo permitimos borrar evaluaciones todavía no finalizadas
+   * y que no pertenezcan a un técnico ya matriculado.
+   */
+  if (
+    ![
+      "generada",
+      "descargada",
+    ].includes(estado) ||
+    evaluacion.matriculado_id !==
+      null
+  ) {
+    redirect(
+      rutaConParametro(
+        "error=eliminar_bloqueada"
+      )
+    )
+  }
+
+  /*
+   * Protección adicional:
+   * una evaluación usada como evaluación de ingreso
+   * nunca puede eliminarse desde este panel.
+   */
+  const {
+    data: matriculadoVinculado,
+    error: errorVinculo,
+  } = await supabase
+    .from("matriculados")
+    .select("id")
+    .eq(
+      "evaluacion_ingreso_id",
+      evaluacionId
+    )
+    .limit(1)
+    .maybeSingle()
+
+  if (errorVinculo) {
+    console.error(
+      "[RENACLI] Error comprobando vínculo de evaluación con matrícula:",
+      errorVinculo
+    )
+
+    redirect(
+      rutaConParametro(
+        "error=eliminar"
+      )
+    )
+  }
+
+  if (matriculadoVinculado) {
+    redirect(
+      rutaConParametro(
+        "error=eliminar_bloqueada"
+      )
+    )
+  }
+
+  const {
+    error: errorEliminar,
+  } = await supabase
+    .from("evaluaciones")
+    .delete()
+    .eq(
+      "id",
+      evaluacionId
+    )
+
+  if (errorEliminar) {
+    console.error(
+      "[RENACLI] Error eliminando evaluación:",
+      errorEliminar
+    )
+
+    redirect(
+      rutaConParametro(
+        "error=eliminar"
+      )
+    )
+  }
+
+  redirect(
+    rutaConParametro(
+      "eliminado=1"
+    )
+  )
+}
+
+
 function mensajeError(
   error: string | undefined
 ) {
@@ -1421,6 +1617,18 @@ function mensajeError(
     error === "guardar"
   ) {
     return "No fue posible guardar la evaluación. No se generó un examen incompleto."
+  }
+
+  if (
+    error === "eliminar"
+  ) {
+    return "No fue posible eliminar la evaluación."
+  }
+
+  if (
+    error === "eliminar_bloqueada"
+  ) {
+    return "Esta evaluación no puede eliminarse. Solo se pueden borrar evaluaciones de aspirantes todavía no finalizadas y que no hayan sido usadas para generar una matrícula."
   }
 
   return null
@@ -1477,6 +1685,40 @@ export default async function EvaluacionesPage({
     mensajeError(
       parametros.error
     )
+
+  const eliminarId =
+    Number(
+      parametros.eliminar ?? 0
+    )
+
+  const confirmarEliminarId =
+    Number(
+      parametros.confirmar_eliminar ??
+        0
+    )
+
+  const rutaBaseEvaluaciones =
+    terminoTramite
+      ? `/administrador/evaluaciones?tramite=${encodeURIComponent(
+          terminoTramite
+        )}`
+      : terminoBusqueda
+        ? `/administrador/evaluaciones?q=${encodeURIComponent(
+            terminoBusqueda
+          )}`
+        : "/administrador/evaluaciones"
+
+  const rutaEvaluacionesCon = (
+    nombre: string,
+    valor: string | number
+  ) =>
+    `${rutaBaseEvaluaciones}${
+      rutaBaseEvaluaciones.includes("?")
+        ? "&"
+        : "?"
+    }${nombre}=${encodeURIComponent(
+      String(valor)
+    )}`
 
   return (
     <main
@@ -1607,6 +1849,14 @@ export default async function EvaluacionesPage({
               </div>
             </>
           )}
+
+        {parametros.eliminado ===
+          "1" && (
+          <Aviso
+            tipo="ok"
+            texto="Evaluación eliminada definitivamente. Sus ítems, respuestas y marcadores asociados también fueron eliminados."
+          />
+        )}
 
         {errorVisible && (
           <Aviso
@@ -2450,8 +2700,205 @@ export default async function EvaluacionesPage({
                               ? "Ver resultado"
                               : "Corregir"}
                           </a>
+
+                          {!finalizada &&
+                            evaluacion.matriculado_id ===
+                              null && (
+                            <a
+                              href={rutaEvaluacionesCon(
+                                "eliminar",
+                                evaluacion.id
+                              )}
+                              style={
+                                botonRojo
+                              }
+                            >
+                              Eliminar evaluación
+                            </a>
+                          )}
                         </div>
                       </div>
+
+                      {!finalizada &&
+                        evaluacion.matriculado_id ===
+                          null &&
+                        eliminarId ===
+                          evaluacion.id &&
+                        confirmarEliminarId !==
+                          evaluacion.id && (
+                        <div
+                          style={{
+                            marginTop:
+                              "16px",
+                            padding:
+                              "16px",
+                            borderRadius:
+                              "10px",
+                            border:
+                              "1px solid #fdba74",
+                            background:
+                              "#fff7ed",
+                            color:
+                              "#9a3412",
+                          }}
+                        >
+                          <strong>
+                            Primera confirmación
+                          </strong>
+
+                          <p
+                            style={{
+                              margin:
+                                "8px 0 14px",
+                              lineHeight:
+                                1.5,
+                            }}
+                          >
+                            Vas a eliminar la evaluación{" "}
+                            <strong>
+                              {evaluacion.codigo}
+                            </strong>
+                            . Si fue generada por error o está duplicada, podés continuar. Una vez eliminada no podrá recuperarse.
+                          </p>
+
+                          <div
+                            style={{
+                              display:
+                                "flex",
+                              gap:
+                                "10px",
+                              flexWrap:
+                                "wrap",
+                            }}
+                          >
+                            <a
+                              href={rutaEvaluacionesCon(
+                                "confirmar_eliminar",
+                                evaluacion.id
+                              )}
+                              style={
+                                botonRojo
+                              }
+                            >
+                              Continuar con la eliminación
+                            </a>
+
+                            <a
+                              href={
+                                rutaBaseEvaluaciones
+                              }
+                              style={
+                                botonBlanco
+                              }
+                            >
+                              Cancelar
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {!finalizada &&
+                        evaluacion.matriculado_id ===
+                          null &&
+                        confirmarEliminarId ===
+                          evaluacion.id && (
+                        <div
+                          style={{
+                            marginTop:
+                              "16px",
+                            padding:
+                              "16px",
+                            borderRadius:
+                              "10px",
+                            border:
+                              "2px solid #e11d48",
+                            background:
+                              "#fff1f2",
+                            color:
+                              "#9f1239",
+                          }}
+                        >
+                          <strong>
+                            Confirmación final
+                          </strong>
+
+                          <p
+                            style={{
+                              margin:
+                                "8px 0 14px",
+                              lineHeight:
+                                1.5,
+                            }}
+                          >
+                            Esta acción eliminará definitivamente la evaluación{" "}
+                            <strong>
+                              {evaluacion.codigo}
+                            </strong>
+                            {" "}y todos sus ítems, respuestas y marcadores asociados.
+                          </p>
+
+                          <form
+                            action={
+                              eliminarEvaluacion
+                            }
+                          >
+                            <input
+                              type="hidden"
+                              name="evaluacion_id"
+                              value={
+                                evaluacion.id
+                              }
+                            />
+
+                            <input
+                              type="hidden"
+                              name="q"
+                              value={
+                                terminoBusqueda
+                              }
+                            />
+
+                            <input
+                              type="hidden"
+                              name="tramite"
+                              value={
+                                terminoTramite
+                              }
+                            />
+
+                            <div
+                              style={{
+                                display:
+                                  "flex",
+                                gap:
+                                  "10px",
+                                flexWrap:
+                                  "wrap",
+                              }}
+                            >
+                              <button
+                                type="submit"
+                                style={
+                                  botonRojo
+                                }
+                              >
+                                Sí, eliminar definitivamente
+                              </button>
+
+                              <a
+                                href={
+                                  rutaBaseEvaluaciones
+                                }
+                                style={
+                                  botonBlanco
+                                }
+                              >
+                                Cancelar
+                              </a>
+                            </div>
+                          </form>
+                        </div>
+                      )}
                     </div>
                   )
                 }
@@ -2614,6 +3061,17 @@ const botonVerde = {
   border: "none",
   borderRadius: "8px",
   background: "#15803d",
+  color: "white",
+  fontWeight: "bold",
+  textDecoration: "none",
+  cursor: "pointer",
+}
+
+const botonRojo = {
+  padding: "13px 20px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#be123c",
   color: "white",
   fontWeight: "bold",
   textDecoration: "none",
