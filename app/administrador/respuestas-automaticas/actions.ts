@@ -11,6 +11,13 @@ const COOKIE_NAME = "renacli_admin_session"
 const RUTA_MODULO =
   "/administrador/respuestas-automaticas"
 
+type SeccionModulo =
+  | "control"
+  | "valores"
+  | "respuestas"
+  | "frases"
+  | "pruebas"
+
 function obtenerTokenAdministrador() {
   const password =
     process.env.RENACLI_ADMIN_PASSWORD
@@ -143,6 +150,7 @@ function normalizarClave(
 function finalizar(
   mensaje?: string,
   error?: string,
+  seccion: SeccionModulo = "control",
 ): never {
   revalidatePath(
     RUTA_MODULO,
@@ -150,6 +158,11 @@ function finalizar(
 
   const parametros =
     new URLSearchParams()
+
+  parametros.set(
+    "seccion",
+    seccion,
+  )
 
   if (mensaje) {
     parametros.set(
@@ -165,15 +178,88 @@ function finalizar(
     )
   }
 
-  const query =
-    parametros.toString()
-
   redirect(
-    `${RUTA_MODULO}${
-      query
-        ? `?${query}`
-        : ""
-    }`,
+    `${RUTA_MODULO}?${parametros.toString()}`,
+  )
+}
+
+
+/* ============================================================
+   CONTROL GENERAL DE AUTOMATIZACIÓN
+   ============================================================ */
+
+export async function cambiarAutomatizacion(
+  formData: FormData,
+) {
+  await verificarAdministrador()
+
+  const supabase =
+    obtenerSupabaseAdmin()
+
+  const accion =
+    texto(
+      formData.get("accion"),
+      20,
+    )
+
+  if (
+    accion !== "habilitar" &&
+    accion !== "deshabilitar"
+  ) {
+    finalizar(
+      undefined,
+      "automatizacion",
+      "control",
+    )
+  }
+
+  const nuevoValor =
+    accion === "habilitar"
+      ? "true"
+      : "false"
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from(
+      "configuracion_respuestas_automaticas",
+    )
+    .update({
+      valor: nuevoValor,
+      activo: true,
+    })
+    .eq(
+      "clave",
+      "automatizacion_habilitada",
+    )
+    .select(
+      "id, valor",
+    )
+    .maybeSingle()
+
+  if (
+    error ||
+    !data
+  ) {
+    console.error(
+      "[RENACLI] Error cambiando estado de automatización:",
+      error,
+    )
+
+    finalizar(
+      undefined,
+      "automatizacion",
+      "control",
+    )
+  }
+
+  finalizar(
+    accion === "habilitar"
+      ? "automatizacion_habilitada"
+      : "automatizacion_deshabilitada",
+    undefined,
+    "control",
   )
 }
 
@@ -239,16 +325,27 @@ export async function crearConfiguracion(
       "booleano",
     ])
 
+  const clavesReservadas =
+    new Set([
+      "automatizacion_habilitada",
+      "fallback_habilitado",
+      "notificar_telegram_respuesta_automatica",
+    ])
+
   if (
     !clave ||
     !nombre ||
     !tiposPermitidos.has(
       tipo,
+    ) ||
+    clavesReservadas.has(
+      clave,
     )
   ) {
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
@@ -278,11 +375,14 @@ export async function crearConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
   finalizar(
     "configuracion_creada",
+    undefined,
+    "valores",
   )
 }
 
@@ -351,6 +451,45 @@ export async function actualizarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
+    )
+  }
+
+  const {
+    data: configuracionActual,
+    error: errorConfiguracionActual,
+  } = await supabase
+    .from(
+      "configuracion_respuestas_automaticas",
+    )
+    .select(
+      "id, clave",
+    )
+    .eq(
+      "id",
+      id,
+    )
+    .maybeSingle()
+
+  if (
+    errorConfiguracionActual ||
+    !configuracionActual
+  ) {
+    finalizar(
+      undefined,
+      "configuracion",
+      "valores",
+    )
+  }
+
+  if (
+    configuracionActual.clave ===
+    "automatizacion_habilitada"
+  ) {
+    finalizar(
+      undefined,
+      "control_protegido",
+      "control",
     )
   }
 
@@ -388,11 +527,14 @@ export async function actualizarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
   finalizar(
     "configuracion_guardada",
+    undefined,
+    "valores",
   )
 }
 
@@ -414,6 +556,7 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
@@ -440,6 +583,7 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
@@ -458,6 +602,7 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "variable_protegida",
+      "valores",
     )
   }
 
@@ -489,6 +634,7 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
@@ -498,6 +644,7 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "variable_en_uso",
+      "valores",
     )
   }
 
@@ -522,11 +669,14 @@ export async function eliminarConfiguracion(
     finalizar(
       undefined,
       "configuracion",
+      "valores",
     )
   }
 
   finalizar(
     "configuracion_eliminada",
+    undefined,
+    "valores",
   )
 }
 
@@ -580,6 +730,7 @@ export async function crearRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
@@ -624,11 +775,14 @@ export async function crearRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
   finalizar(
     "respuesta_creada",
+    undefined,
+    "respuestas",
   )
 }
 
@@ -684,6 +838,7 @@ export async function actualizarRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
@@ -726,11 +881,14 @@ export async function actualizarRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
   finalizar(
     "respuesta_guardada",
+    undefined,
+    "respuestas",
   )
 }
 
@@ -752,6 +910,7 @@ export async function eliminarRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
@@ -778,6 +937,7 @@ export async function eliminarRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
@@ -787,6 +947,7 @@ export async function eliminarRespuesta(
     finalizar(
       undefined,
       "fallback_no_eliminar",
+      "respuestas",
     )
   }
 
@@ -811,11 +972,14 @@ export async function eliminarRespuesta(
     finalizar(
       undefined,
       "respuesta",
+      "respuestas",
     )
   }
 
   finalizar(
     "respuesta_eliminada",
+    undefined,
+    "respuestas",
   )
 }
 
@@ -871,6 +1035,7 @@ export async function agregarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
@@ -898,11 +1063,14 @@ export async function agregarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
   finalizar(
     "frase_creada",
+    undefined,
+    "frases",
   )
 }
 
@@ -951,6 +1119,7 @@ export async function actualizarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
@@ -985,11 +1154,14 @@ export async function actualizarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
   finalizar(
     "frase_guardada",
+    undefined,
+    "frases",
   )
 }
 
@@ -1011,6 +1183,7 @@ export async function eliminarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
@@ -1035,10 +1208,13 @@ export async function eliminarFrase(
     finalizar(
       undefined,
       "frase",
+      "frases",
     )
   }
 
   finalizar(
     "frase_eliminada",
+    undefined,
+    "frases",
   )
 }
