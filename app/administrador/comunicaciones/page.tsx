@@ -1929,6 +1929,31 @@ function ConsultaCard({
 }) {
   const cerrado = Boolean(consulta.cerrado_en)
 
+  const textoMensajeInicial = String(consulta.mensaje ?? "").trim()
+  const fechaConsultaMs = new Date(consulta.created_at).getTime()
+
+  const mensajeInicialYaExiste =
+    Boolean(textoMensajeInicial) &&
+    mensajes.some(mensaje => {
+      if (mensaje.autor !== "solicitante") return false
+      if (mensaje.mensaje.trim() !== textoMensajeInicial) return false
+
+      const fechaMensajeMs = new Date(mensaje.created_at).getTime()
+
+      if (!Number.isFinite(fechaConsultaMs) || !Number.isFinite(fechaMensajeMs)) {
+        return false
+      }
+
+      return Math.abs(fechaMensajeMs - fechaConsultaMs) <= 5 * 60 * 1000
+    })
+
+  const mostrarMensajeInicial =
+    Boolean(textoMensajeInicial) && !mensajeInicialYaExiste
+
+  const actividadSolicitante =
+    consulta.ultimo_mensaje_origen === "solicitante" ||
+    (!consulta.ultimo_mensaje_origen && Boolean(textoMensajeInicial))
+
   const elementosChat: Array<
     | {
         tipo: "mensaje"
@@ -1945,6 +1970,16 @@ function ConsultaCard({
         documento: DocumentoTramite
       }
   > = []
+
+  if (mostrarMensajeInicial) {
+    elementosChat.push({
+      tipo: "mensaje",
+      fecha: consulta.created_at,
+      id: `consulta-inicial-${consulta.id}`,
+      autor: "solicitante",
+      mensaje: textoMensajeInicial,
+    })
+  }
 
   for (const mensaje of mensajes) {
     elementosChat.push({
@@ -1979,7 +2014,9 @@ function ConsultaCard({
       ? "Último mensaje del solicitante"
       : consulta.ultimo_mensaje_origen === "administracion"
         ? "Última respuesta de RENACLI"
-        : "Sin actividad reciente"
+        : textoMensajeInicial
+          ? "Nueva consulta del solicitante"
+          : "Sin actividad reciente"
 
   return (
     <article
@@ -2051,7 +2088,9 @@ function ConsultaCard({
             {ultimoOrigen}
             {consulta.ultimo_mensaje_en
               ? ` · ${formatearFechaHora(consulta.ultimo_mensaje_en)}`
-              : ""}
+              : textoMensajeInicial
+                ? ` · ${formatearFechaHora(consulta.created_at)}`
+                : ""}
           </p>
         </div>
 
@@ -2060,7 +2099,7 @@ function ConsultaCard({
       <details
         open={
           !cerrado &&
-          (forzarAbierto || consulta.ultimo_mensaje_origen === "solicitante")
+          (forzarAbierto || actividadSolicitante)
         }
         style={{
           marginTop: "16px",
