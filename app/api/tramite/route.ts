@@ -890,12 +890,90 @@ export async function GET(
       )
     }
 
+    const mensajesGuardados =
+      mensajes || []
+
+    const mensajeInicial =
+      String(
+        consulta.mensaje ?? "",
+      ).trim()
+
+    const fechaCreacionConsulta =
+      new Date(
+        consulta.created_at,
+      ).getTime()
+
+    const mensajeInicialYaGuardado =
+      mensajeInicial
+        ? mensajesGuardados.some(
+            mensajeItem => {
+              if (
+                mensajeItem.autor !==
+                  "solicitante" ||
+                String(
+                  mensajeItem.mensaje ??
+                    "",
+                ).trim() !==
+                  mensajeInicial
+              ) {
+                return false
+              }
+
+              const fechaMensaje =
+                new Date(
+                  mensajeItem.created_at,
+                ).getTime()
+
+              if (
+                !Number.isFinite(
+                  fechaCreacionConsulta,
+                ) ||
+                !Number.isFinite(
+                  fechaMensaje,
+                )
+              ) {
+                return false
+              }
+
+              return (
+                Math.abs(
+                  fechaMensaje -
+                    fechaCreacionConsulta,
+                ) <=
+                60 * 1000
+              )
+            },
+          )
+        : false
+
+    const mensajesVisibles =
+      mensajeInicial &&
+      !mensajeInicialYaGuardado
+        ? [
+            {
+              id:
+                -consulta.id,
+              consulta_id:
+                consulta.id,
+              autor:
+                "solicitante",
+              mensaje:
+                mensajeInicial,
+              es_mensaje_sistema:
+                false,
+              created_at:
+                consulta.created_at,
+            },
+            ...mensajesGuardados,
+          ]
+        : mensajesGuardados
+
     return NextResponse.json({
       autenticado: true,
       tramite:
         consulta,
       mensajes:
-        mensajes || [],
+        mensajesVisibles,
       documentos:
         documentos || [],
       historial:
