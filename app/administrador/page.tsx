@@ -4117,6 +4117,13 @@ export default async function AdministradorPage({
                     >
                       Evaluaciones RENACLI
                     </a>
+
+                    <a
+                      href="/administrador/respuestas-automaticas"
+                      style={botonBlanco}
+                    >
+                      Respuestas automáticas
+                    </a>
                   </div>
                 </div>
 
