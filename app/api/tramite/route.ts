@@ -578,7 +578,7 @@ async function enviarMensajeSolicitante(
       consulta_id:
         consulta.id,
       tipo_evento:
-        "mensaje",
+        "actualizacion",
       estado_anterior:
         consulta.estado,
       estado_nuevo:
@@ -865,7 +865,7 @@ export async function GET(
           "cambio_estado",
           "documento_cargado",
           "respuesta",
-          "mensaje",
+          "actualizacion",
           "pedido_documentacion",
           "cierre",
         ],
