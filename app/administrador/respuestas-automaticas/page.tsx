@@ -10,6 +10,7 @@ import {
   actualizarFrase,
   actualizarRespuesta,
   agregarFrase,
+  cambiarAutomatizacion,
   crearConfiguracion,
   crearRespuesta,
   eliminarConfiguracion,
@@ -17,8 +18,14 @@ import {
   eliminarRespuesta,
 } from "./actions"
 
-const COOKIE_NAME =
-  "renacli_admin_session"
+const COOKIE_NAME = "renacli_admin_session"
+
+type SeccionModulo =
+  | "control"
+  | "valores"
+  | "respuestas"
+  | "frases"
+  | "pruebas"
 
 type Configuracion = {
   id: number
@@ -76,6 +83,7 @@ type Props = {
     mensaje?: string
     error?: string
     prueba?: string
+    seccion?: string
   }>
 }
 
@@ -139,10 +147,13 @@ function obtenerSupabaseAdmin() {
 function obtenerMensajeOk(
   codigo?: string,
 ) {
-  const mensajes: Record<
-    string,
-    string
-  > = {
+  const mensajes: Record<string, string> = {
+    automatizacion_habilitada:
+      "Las respuestas automáticas quedaron habilitadas.",
+
+    automatizacion_deshabilitada:
+      "Las respuestas automáticas quedaron deshabilitadas.",
+
     configuracion_creada:
       "Variable creada correctamente.",
 
@@ -181,10 +192,13 @@ function obtenerMensajeOk(
 function obtenerMensajeError(
   codigo?: string,
 ) {
-  const mensajes: Record<
-    string,
-    string
-  > = {
+  const mensajes: Record<string, string> = {
+    automatizacion:
+      "No fue posible cambiar el estado de las respuestas automáticas.",
+
+    control_protegido:
+      "El interruptor general solamente puede modificarse desde la sección Control.",
+
     configuracion:
       "No fue posible guardar la configuración.",
 
@@ -234,13 +248,35 @@ function etiquetaTipoCoincidencia(
     return "Coincidencia exacta"
   }
 
-  if (
-    tipo === "todas_palabras"
-  ) {
+  if (tipo === "todas_palabras") {
     return "Todas las palabras"
   }
 
   return "Contiene la frase"
+}
+
+function normalizarSeccion(
+  valor?: string,
+): SeccionModulo {
+  const seccionesPermitidas =
+    new Set<SeccionModulo>([
+      "control",
+      "valores",
+      "respuestas",
+      "frases",
+      "pruebas",
+    ])
+
+  if (
+    valor &&
+    seccionesPermitidas.has(
+      valor as SeccionModulo,
+    )
+  ) {
+    return valor as SeccionModulo
+  }
+
+  return "control"
 }
 
 export default async function RespuestasAutomaticasPage({
@@ -258,6 +294,11 @@ export default async function RespuestasAutomaticasPage({
     searchParams
       ? await searchParams
       : {}
+
+  const seccion =
+    normalizarSeccion(
+      parametros.seccion,
+    )
 
   const supabase =
     obtenerSupabaseAdmin()
@@ -398,11 +439,59 @@ export default async function RespuestasAutomaticasPage({
       []
     ) as Frase[]
 
+  const clavesSistema =
+    new Set([
+      "automatizacion_habilitada",
+      "fallback_habilitado",
+      "notificar_telegram_respuesta_automatica",
+    ])
+
+  const variablesEditables =
+    configuraciones.filter(
+      item =>
+        !clavesSistema.has(
+          item.clave,
+        ),
+    )
+
+  const configuracionAutomatizacion =
+    configuraciones.find(
+      item =>
+        item.clave ===
+        "automatizacion_habilitada",
+    )
+
+  const configuracionFallback =
+    configuraciones.find(
+      item =>
+        item.clave ===
+        "fallback_habilitado",
+    )
+
+  const configuracionTelegram =
+    configuraciones.find(
+      item =>
+        item.clave ===
+        "notificar_telegram_respuesta_automatica",
+    )
+
+  const automatizacionActiva =
+    valorBooleano(
+      configuracionAutomatizacion?.valor,
+    )
+
+  const fallbackActivo =
+    valorBooleano(
+      configuracionFallback?.valor,
+    )
+
+  const telegramActivo =
+    valorBooleano(
+      configuracionTelegram?.valor,
+    )
+
   const frasesPorRespuesta =
-    new Map<
-      number,
-      Frase[]
-    >()
+    new Map<number, Frase[]>()
 
   for (
     const frase
@@ -413,7 +502,9 @@ export default async function RespuestasAutomaticasPage({
         frase.respuesta_id,
       ) ?? []
 
-    actuales.push(frase)
+    actuales.push(
+      frase,
+    )
 
     frasesPorRespuesta.set(
       frase.respuesta_id,
@@ -436,9 +527,13 @@ export default async function RespuestasAutomaticasPage({
     | null = null
 
   let errorPrueba:
-    string | null = null
+    | string
+    | null = null
 
-  if (prueba) {
+  if (
+    seccion === "pruebas" &&
+    prueba
+  ) {
     const {
       data,
       error,
@@ -483,30 +578,6 @@ export default async function RespuestasAutomaticasPage({
       parametros.error,
     )
 
-  const configuracionAutomatizacion =
-    configuraciones.find(
-      item =>
-        item.clave ===
-        "automatizacion_habilitada",
-    )
-
-  const configuracionFallback =
-    configuraciones.find(
-      item =>
-        item.clave ===
-        "fallback_habilitado",
-    )
-
-  const automatizacionActiva =
-    valorBooleano(
-      configuracionAutomatizacion?.valor,
-    )
-
-  const fallbackActivo =
-    valorBooleano(
-      configuracionFallback?.valor,
-    )
-
   const cantidadRespuestasActivas =
     respuestas.filter(
       item =>
@@ -518,6 +589,43 @@ export default async function RespuestasAutomaticasPage({
       item =>
         item.activo,
     ).length
+
+  const secciones: Array<{
+    id: SeccionModulo
+    titulo: string
+    descripcion: string
+  }> = [
+    {
+      id: "control",
+      titulo: "Control",
+      descripcion:
+        "Encender o apagar el sistema.",
+    },
+    {
+      id: "valores",
+      titulo: "Valores",
+      descripcion:
+        "Precios y variables.",
+    },
+    {
+      id: "respuestas",
+      titulo: "Respuestas",
+      descripcion:
+        "Textos que enviará RENACLI.",
+    },
+    {
+      id: "frases",
+      titulo: "Frases",
+      descripcion:
+        "Cómo reconoce las consultas.",
+    },
+    {
+      id: "pruebas",
+      titulo: "Pruebas",
+      descripcion:
+        "Simular preguntas sin enviar.",
+    },
+  ]
 
   return (
     <main style={pagina}>
@@ -554,11 +662,9 @@ export default async function RespuestasAutomaticasPage({
             </h1>
 
             <p style={descripcion}>
-              Administrá precios,
-              variables, preguntas,
-              respuestas y formas de
-              detección sin modificar el
-              código de RENACLI.
+              Cada función está separada
+              para evitar modificaciones
+              accidentales.
             </p>
           </div>
 
@@ -570,20 +676,9 @@ export default async function RespuestasAutomaticasPage({
             }
           >
             {automatizacionActiva
-              ? "AUTOMATIZACIÓN ACTIVADA"
-              : "AUTOMATIZACIÓN APAGADA"}
+              ? "AUTOMATIZACIÓN HABILITADA"
+              : "AUTOMATIZACIÓN DESHABILITADA"}
           </div>
-        </div>
-
-        <div style={avisoInformativo}>
-          <strong>
-            Importante:
-          </strong>{" "}
-          este módulo pertenece a
-          RENACLI. Enfri puede recibir
-          notificaciones y responder
-          manualmente, pero no utilizará
-          respuestas automáticas.
         </div>
 
         {mensajeOk && (
@@ -598,211 +693,250 @@ export default async function RespuestasAutomaticasPage({
           </div>
         )}
 
-        <div style={resumenGrid}>
-          <Resumen
-            numero={
-              configuraciones.length
-            }
-            texto="Variables"
-          />
+        <nav style={menuSolapas}>
+          {secciones.map(
+            item => {
+              const activa =
+                seccion === item.id
 
-          <Resumen
-            numero={
-              cantidadRespuestasActivas
-            }
-            texto="Respuestas activas"
-          />
+              return (
+                <Link
+                  key={item.id}
+                  href={`/administrador/respuestas-automaticas?seccion=${item.id}`}
+                  style={{
+                    ...solapa,
+                    ...(activa
+                      ? solapaActiva
+                      : {}),
+                  }}
+                >
+                  <strong>
+                    {item.titulo}
+                  </strong>
 
-          <Resumen
-            numero={
-              cantidadFrasesActivas
-            }
-            texto="Frases activas"
-          />
-
-          <Resumen
-            numero={
-              fallbackActivo
-                ? 1
-                : 0
-            }
-            texto="Respaldo activo"
-          />
-        </div>
-
-        <section style={bloque}>
-          <div style={cabeceraBloque}>
-            <div>
-              <h2 style={tituloSeccion}>
-                Probar el motor
-              </h2>
-
-              <p style={textoAyuda}>
-                Esta prueba no envía
-                ningún mensaje a los
-                usuarios. Solamente
-                muestra qué respondería
-                RENACLI.
-              </p>
-            </div>
-
-            <span style={etiquetaPrueba}>
-              MODO PRUEBA
-            </span>
-          </div>
-
-          <form method="get">
-            <textarea
-              name="prueba"
-              rows={4}
-              maxLength={5000}
-              defaultValue={prueba}
-              placeholder="Ejemplo: Hola, ¿cuánto sale renovar mi matrícula?"
-              style={textarea}
-            />
-
-            <button
-              type="submit"
-              style={botonPrincipal}
-            >
-              Probar respuesta
-            </button>
-          </form>
-
-          {errorPrueba && (
-            <div style={avisoError}>
-              Error al probar el motor:
-              {" "}
-              {errorPrueba}
-            </div>
+                  <span style={solapaDescripcion}>
+                    {item.descripcion}
+                  </span>
+                </Link>
+              )
+            },
           )}
+        </nav>
 
-          {prueba &&
-            !errorPrueba &&
-            resultadoPrueba && (
-              <div style={resultadoPruebaCaja}>
-                <div style={resultadoCabecera}>
-                  <div>
-                    <strong>
-                      {
-                        resultadoPrueba.titulo
-                      }
-                    </strong>
+        {seccion === "control" && (
+          <>
+            <section style={bloqueDestacado}>
+              <div style={cabeceraBloque}>
+                <div>
+                  <p style={sobreTitulo}>
+                    INTERRUPTOR GENERAL
+                  </p>
 
-                    <p style={resultadoMeta}>
-                      Código:{" "}
-                      {
-                        resultadoPrueba.codigo
-                      }
-                      {" · "}
-                      Categoría:{" "}
-                      {
-                        resultadoPrueba.categoria
-                      }
-                    </p>
-                  </div>
+                  <h2 style={tituloSeccion}>
+                    Control de respuestas automáticas
+                  </h2>
 
-                  <span
+                  <p style={textoAyuda}>
+                    Este es el control
+                    central de RENACLI.
+                    Cuando está
+                    deshabilitado, el
+                    motor no puede enviar
+                    respuestas automáticas.
+                  </p>
+                </div>
+
+                <div
+                  style={
+                    automatizacionActiva
+                      ? estadoGrandeActivo
+                      : estadoGrandeApagado
+                  }
+                >
+                  {automatizacionActiva
+                    ? "HABILITADAS"
+                    : "DESHABILITADAS"}
+                </div>
+              </div>
+
+              <div style={controlCaja}>
+                <div>
+                  <strong style={controlTitulo}>
+                    Estado actual
+                  </strong>
+
+                  <p style={controlTexto}>
+                    {automatizacionActiva
+                      ? "RENACLI tiene permitido utilizar el motor automático."
+                      : "RENACLI tiene bloqueado el envío automático de respuestas."}
+                  </p>
+                </div>
+
+                <form
+                  action={
+                    cambiarAutomatizacion
+                  }
+                >
+                  <input
+                    type="hidden"
+                    name="accion"
+                    value={
+                      automatizacionActiva
+                        ? "deshabilitar"
+                        : "habilitar"
+                    }
+                  />
+
+                  <button
+                    type="submit"
                     style={
-                      resultadoPrueba.es_fallback
-                        ? pildoraAdvertencia
-                        : pildoraOk
+                      automatizacionActiva
+                        ? botonDeshabilitar
+                        : botonHabilitar
                     }
                   >
-                    {resultadoPrueba.es_fallback
-                      ? "RESPALDO"
-                      : "COINCIDENCIA"}
-                  </span>
-                </div>
-
-                <p style={resultadoMeta}>
-                  Detectó:{" "}
-                  <strong>
-                    {resultadoPrueba.frase_detectada ??
-                      "Ninguna frase específica"}
-                  </strong>
-                </p>
-
-                {resultadoPrueba.tipo_coincidencia && (
-                  <p style={resultadoMeta}>
-                    Tipo:{" "}
-                    {
-                      etiquetaTipoCoincidencia(
-                        resultadoPrueba.tipo_coincidencia,
-                      )
-                    }
-                  </p>
-                )}
-
-                <div style={respuestaVista}>
-                  {
-                    resultadoPrueba.respuesta_renderizada
-                  }
-                </div>
-
-                {resultadoPrueba.requiere_intervencion && (
-                  <div style={revisionHumana}>
-                    Esta respuesta está
-                    marcada para revisión
-                    posterior de un
-                    administrador.
-                  </div>
-                )}
+                    {automatizacionActiva
+                      ? "DESHABILITAR RESPUESTAS AUTOMÁTICAS"
+                      : "HABILITAR RESPUESTAS AUTOMÁTICAS"}
+                  </button>
+                </form>
               </div>
-            )}
 
-          {prueba &&
-            !errorPrueba &&
-            !resultadoPrueba && (
-              <div style={avisoError}>
-                El motor no encontró una
-                respuesta para esta
-                consulta.
+              <div style={avisoInformativo}>
+                <strong>
+                  Importante:
+                </strong>{" "}
+                este control corresponde
+                únicamente a RENACLI.
+                Enfri puede recibir
+                notificaciones y responder
+                manualmente, pero no
+                generará respuestas
+                automáticas.
               </div>
-            )}
-        </section>
+            </section>
 
-        <section style={bloque}>
-          <div style={cabeceraBloque}>
-            <div>
+            <section style={bloque}>
               <h2 style={tituloSeccion}>
-                Valores y configuración
+                Estado del sistema
               </h2>
 
-              <p style={textoAyuda}>
-                Estos valores pueden
-                utilizarse dentro de las
-                respuestas mediante
-                variables.
-              </p>
+              <div style={resumenGrid}>
+                <ResumenEstado
+                  titulo="Motor automático"
+                  activo={
+                    automatizacionActiva
+                  }
+                  textoActivo="Habilitado"
+                  textoInactivo="Deshabilitado"
+                />
+
+                <ResumenEstado
+                  titulo="Respuesta de respaldo"
+                  activo={
+                    fallbackActivo
+                  }
+                  textoActivo="Habilitada"
+                  textoInactivo="Deshabilitada"
+                />
+
+                <ResumenEstado
+                  titulo="Avisos por Telegram"
+                  activo={
+                    telegramActivo
+                  }
+                  textoActivo="Habilitados"
+                  textoInactivo="Deshabilitados"
+                />
+              </div>
+            </section>
+
+            <section style={bloque}>
+              <h2 style={tituloSeccion}>
+                Resumen
+              </h2>
+
+              <div style={resumenGrid}>
+                <Resumen
+                  numero={
+                    variablesEditables.length
+                  }
+                  texto="Variables editables"
+                />
+
+                <Resumen
+                  numero={
+                    cantidadRespuestasActivas
+                  }
+                  texto="Respuestas activas"
+                />
+
+                <Resumen
+                  numero={
+                    cantidadFrasesActivas
+                  }
+                  texto="Frases activas"
+                />
+
+                <Resumen
+                  numero={
+                    fallbackActivo
+                      ? 1
+                      : 0
+                  }
+                  texto="Respaldo activo"
+                />
+              </div>
+            </section>
+          </>
+        )}
+
+        {seccion === "valores" && (
+          <section style={bloque}>
+            <div style={cabeceraBloque}>
+              <div>
+                <h2 style={tituloSeccion}>
+                  Valores y variables
+                </h2>
+
+                <p style={textoAyuda}>
+                  Acá se modifican
+                  precios, porcentajes y
+                  otros datos que pueden
+                  aparecer dentro de las
+                  respuestas.
+                </p>
+              </div>
+
+              <span style={contador}>
+                {variablesEditables.length}
+                {" "}
+                variables
+              </span>
             </div>
-          </div>
 
-          <div style={ejemploVariable}>
-            Ejemplo:{" "}
-            <code>
-              {
-                "{{precio_inscripcion}}"
-              }
-            </code>{" "}
-            será reemplazado
-            automáticamente por el
-            precio actual configurado.
-          </div>
+            <div style={avisoSeguridad}>
+              El interruptor general de
+              respuestas automáticas no
+              aparece en esta sección
+              para evitar que se modifique
+              por error.
+            </div>
 
-          <div style={grillaVariables}>
-            {configuraciones.map(
-              item => {
-                const protegida =
-                  [
-                    "automatizacion_habilitada",
-                    "fallback_habilitado",
-                    "notificar_telegram_respuesta_automatica",
-                  ].includes(
-                    item.clave,
-                  )
+            <div style={ejemploVariable}>
+              Ejemplo:{" "}
+              <code>
+                {
+                  "{{precio_inscripcion}}"
+                }
+              </code>{" "}
+              será reemplazado por el
+              valor actual configurado.
+            </div>
 
-                return (
+            <div style={grillaVariables}>
+              {variablesEditables.map(
+                item => (
                   <article
                     key={item.id}
                     style={tarjeta}
@@ -945,189 +1079,183 @@ export default async function RespuestasAutomaticasPage({
                           }
                         />
 
-                        Configuración activa
+                        Variable activa
                       </label>
 
                       <button
                         type="submit"
                         style={botonPrincipal}
                       >
-                        Guardar
+                        Guardar cambios
                       </button>
                     </form>
 
-                    {!protegida && (
-                      <form
-                        action={
-                          eliminarConfiguracion
-                        }
-                        style={formEliminar}
+                    <form
+                      action={
+                        eliminarConfiguracion
+                      }
+                      style={formEliminar}
+                    >
+                      <input
+                        type="hidden"
+                        name="id"
+                        value={item.id}
+                      />
+
+                      <button
+                        type="submit"
+                        style={botonPeligro}
                       >
-                        <input
-                          type="hidden"
-                          name="id"
-                          value={item.id}
-                        />
-
-                        <button
-                          type="submit"
-                          style={botonPeligro}
-                        >
-                          Eliminar variable
-                        </button>
-                      </form>
-                    )}
+                        Eliminar variable
+                      </button>
+                    </form>
                   </article>
-                )
-              },
-            )}
-          </div>
-
-          <details style={detailsNuevo}>
-            <summary style={summaryNuevo}>
-              + Agregar nueva variable
-            </summary>
-
-            <form
-              action={crearConfiguracion}
-              style={formNuevo}
-            >
-              <label style={label}>
-                Clave
-              </label>
-
-              <input
-                name="clave"
-                maxLength={80}
-                placeholder="Ejemplo: precio_curso_inverter"
-                required
-                style={campo}
-              />
-
-              <label style={label}>
-                Nombre visible
-              </label>
-
-              <input
-                name="nombre"
-                maxLength={150}
-                placeholder="Ejemplo: Precio curso Inverter"
-                required
-                style={campo}
-              />
-
-              <label style={label}>
-                Valor
-              </label>
-
-              <input
-                name="valor"
-                maxLength={500}
-                placeholder="Valor"
-                style={campo}
-              />
-
-              <label style={label}>
-                Tipo
-              </label>
-
-              <select
-                name="tipo"
-                defaultValue="texto"
-                style={campo}
-              >
-                <option value="texto">
-                  Texto
-                </option>
-
-                <option value="numero">
-                  Número
-                </option>
-
-                <option value="moneda">
-                  Moneda
-                </option>
-
-                <option value="porcentaje">
-                  Porcentaje
-                </option>
-
-                <option value="booleano">
-                  Sí / No
-                </option>
-              </select>
-
-              <label style={label}>
-                Descripción
-              </label>
-
-              <textarea
-                name="descripcion"
-                rows={3}
-                maxLength={1000}
-                placeholder="Descripción opcional"
-                style={textarea}
-              />
-
-              <label style={label}>
-                Orden
-              </label>
-
-              <input
-                name="orden"
-                type="number"
-                defaultValue={100}
-                style={campo}
-              />
-
-              <button
-                type="submit"
-                style={botonPrincipal}
-              >
-                Crear variable
-              </button>
-            </form>
-          </details>
-        </section>
-
-        <section style={bloque}>
-          <div style={cabeceraBloque}>
-            <div>
-              <h2 style={tituloSeccion}>
-                Preguntas y respuestas
-              </h2>
-
-              <p style={textoAyuda}>
-                Cada respuesta puede
-                tener muchas formas de
-                preguntar. Podés
-                editarlas, activarlas,
-                desactivarlas o
-                eliminarlas.
-              </p>
+                ),
+              )}
             </div>
 
-            <span style={contador}>
-              {cantidadRespuestasActivas}
-              {" "}
-              activas
-            </span>
-          </div>
+            <details style={detailsNuevo}>
+              <summary style={summaryNuevo}>
+                + Agregar nueva variable
+              </summary>
 
-          {respuestas.length === 0 ? (
-            <div style={vacio}>
-              Todavía no hay respuestas
-              automáticas configuradas.
+              <form
+                action={
+                  crearConfiguracion
+                }
+                style={formNuevo}
+              >
+                <label style={label}>
+                  Clave
+                </label>
+
+                <input
+                  name="clave"
+                  maxLength={80}
+                  placeholder="Ejemplo: precio_curso_inverter"
+                  required
+                  style={campo}
+                />
+
+                <label style={label}>
+                  Nombre visible
+                </label>
+
+                <input
+                  name="nombre"
+                  maxLength={150}
+                  placeholder="Ejemplo: Precio curso Inverter"
+                  required
+                  style={campo}
+                />
+
+                <label style={label}>
+                  Valor
+                </label>
+
+                <input
+                  name="valor"
+                  maxLength={500}
+                  placeholder="Valor"
+                  style={campo}
+                />
+
+                <label style={label}>
+                  Tipo
+                </label>
+
+                <select
+                  name="tipo"
+                  defaultValue="texto"
+                  style={campo}
+                >
+                  <option value="texto">
+                    Texto
+                  </option>
+
+                  <option value="numero">
+                    Número
+                  </option>
+
+                  <option value="moneda">
+                    Moneda
+                  </option>
+
+                  <option value="porcentaje">
+                    Porcentaje
+                  </option>
+
+                  <option value="booleano">
+                    Sí / No
+                  </option>
+                </select>
+
+                <label style={label}>
+                  Descripción
+                </label>
+
+                <textarea
+                  name="descripcion"
+                  rows={3}
+                  maxLength={1000}
+                  placeholder="Descripción opcional"
+                  style={textarea}
+                />
+
+                <label style={label}>
+                  Orden
+                </label>
+
+                <input
+                  name="orden"
+                  type="number"
+                  defaultValue={100}
+                  style={campo}
+                />
+
+                <button
+                  type="submit"
+                  style={botonPrincipal}
+                >
+                  Crear variable
+                </button>
+              </form>
+            </details>
+          </section>
+        )}
+
+        {seccion === "respuestas" && (
+          <section style={bloque}>
+            <div style={cabeceraBloque}>
+              <div>
+                <h2 style={tituloSeccion}>
+                  Respuestas
+                </h2>
+
+                <p style={textoAyuda}>
+                  Acá editás únicamente
+                  el texto que responderá
+                  RENACLI. Las frases de
+                  detección se administran
+                  en otra solapa.
+                </p>
+              </div>
+
+              <span style={contador}>
+                {cantidadRespuestasActivas}
+                {" "}
+                activas
+              </span>
             </div>
-          ) : (
-            respuestas.map(
-              respuesta => {
-                const frasesRespuesta =
-                  frasesPorRespuesta.get(
-                    respuesta.id,
-                  ) ?? []
 
-                return (
+            {respuestas.length === 0 ? (
+              <div style={vacio}>
+                Todavía no hay respuestas
+                configuradas.
+              </div>
+            ) : (
+              respuestas.map(
+                respuesta => (
                   <details
                     key={respuesta.id}
                     style={respuestaCard}
@@ -1250,7 +1378,7 @@ export default async function RespuestasAutomaticasPage({
 
                         <textarea
                           name="respuesta_plantilla"
-                          rows={6}
+                          rows={7}
                           maxLength={5000}
                           defaultValue={
                             respuesta.respuesta_plantilla
@@ -1293,8 +1421,9 @@ export default async function RespuestasAutomaticasPage({
                             }
                           />
 
-                          Marcar para revisión
-                          humana
+                          Requiere revisión
+                          posterior de un
+                          administrador
                         </label>
 
                         <button
@@ -1334,295 +1463,506 @@ export default async function RespuestasAutomaticasPage({
                           </button>
                         </form>
                       )}
-
-                      {!respuesta.es_fallback && (
-                        <div style={frasesBloque}>
-                          <h3 style={subtituloSeccion}>
-                            Formas de preguntar
-                          </h3>
-
-                          <p style={textoAyuda}>
-                            Estas frases son
-                            las que utiliza el
-                            motor para reconocer
-                            la consulta.
-                          </p>
-
-                          {frasesRespuesta.length ===
-                          0 ? (
-                            <div style={vacio}>
-                              Esta respuesta no
-                              tiene frases de
-                              detección.
-                            </div>
-                          ) : (
-                            frasesRespuesta.map(
-                              frase => (
-                                <div
-                                  key={frase.id}
-                                  style={
-                                    fraseTarjeta
-                                  }
-                                >
-                                  <form
-                                    action={
-                                      actualizarFrase
-                                    }
-                                    style={
-                                      formFrase
-                                    }
-                                  >
-                                    <input
-                                      type="hidden"
-                                      name="id"
-                                      value={
-                                        frase.id
-                                      }
-                                    />
-
-                                    <div>
-                                      <label style={label}>
-                                        Frase
-                                      </label>
-
-                                      <input
-                                        name="frase"
-                                        defaultValue={
-                                          frase.frase
-                                        }
-                                        maxLength={500}
-                                        required
-                                        style={campo}
-                                      />
-                                    </div>
-
-                                    <div>
-                                      <label style={label}>
-                                        Coincidencia
-                                      </label>
-
-                                      <select
-                                        name="tipo_coincidencia"
-                                        defaultValue={
-                                          frase.tipo_coincidencia
-                                        }
-                                        style={campo}
-                                      >
-                                        <option value="contiene">
-                                          Contiene la frase
-                                        </option>
-
-                                        <option value="exacta">
-                                          Exacta
-                                        </option>
-
-                                        <option value="todas_palabras">
-                                          Todas las palabras
-                                        </option>
-                                      </select>
-                                    </div>
-
-                                    <label style={checkboxFila}>
-                                      <input
-                                        type="checkbox"
-                                        name="activo"
-                                        defaultChecked={
-                                          frase.activo
-                                        }
-                                      />
-
-                                      Activa
-                                    </label>
-
-                                    <button
-                                      type="submit"
-                                      style={
-                                        botonSecundario
-                                      }
-                                    >
-                                      Guardar frase
-                                    </button>
-                                  </form>
-
-                                  <form
-                                    action={
-                                      eliminarFrase
-                                    }
-                                    style={
-                                      formEliminarFrase
-                                    }
-                                  >
-                                    <input
-                                      type="hidden"
-                                      name="id"
-                                      value={
-                                        frase.id
-                                      }
-                                    />
-
-                                    <button
-                                      type="submit"
-                                      style={
-                                        botonPeligro
-                                      }
-                                    >
-                                      Eliminar
-                                    </button>
-                                  </form>
-                                </div>
-                              ),
-                            )
-                          )}
-
-                          <form
-                            action={
-                              agregarFrase
-                            }
-                            style={
-                              nuevaFrase
-                            }
-                          >
-                            <input
-                              type="hidden"
-                              name="respuesta_id"
-                              value={
-                                respuesta.id
-                              }
-                            />
-
-                            <div>
-                              <label style={label}>
-                                Nueva frase
-                              </label>
-
-                              <input
-                                name="frase"
-                                maxLength={500}
-                                placeholder="Ejemplo: cuánto cuesta renovar"
-                                required
-                                style={campo}
-                              />
-                            </div>
-
-                            <div>
-                              <label style={label}>
-                                Tipo
-                              </label>
-
-                              <select
-                                name="tipo_coincidencia"
-                                defaultValue="contiene"
-                                style={campo}
-                              >
-                                <option value="contiene">
-                                  Contiene la frase
-                                </option>
-
-                                <option value="exacta">
-                                  Exacta
-                                </option>
-
-                                <option value="todas_palabras">
-                                  Todas las palabras
-                                </option>
-                              </select>
-                            </div>
-
-                            <button
-                              type="submit"
-                              style={
-                                botonSecundario
-                              }
-                            >
-                              Agregar frase
-                            </button>
-                          </form>
-                        </div>
-                      )}
                     </div>
                   </details>
-                )
-              },
-            )
-          )}
+                ),
+              )
+            )}
 
-          <details style={detailsNuevo}>
-            <summary style={summaryNuevo}>
-              + Crear nueva pregunta /
-              respuesta
-            </summary>
+            <details style={detailsNuevo}>
+              <summary style={summaryNuevo}>
+                + Crear nueva respuesta
+              </summary>
 
-            <form
-              action={crearRespuesta}
-              style={formNuevo}
-            >
-              <label style={label}>
-                Título
-              </label>
+              <form
+                action={crearRespuesta}
+                style={formNuevo}
+              >
+                <label style={label}>
+                  Título
+                </label>
 
-              <input
-                name="titulo"
-                maxLength={150}
-                placeholder="Ejemplo: Curso Inverter"
-                required
-                style={campo}
-              />
-
-              <label style={label}>
-                Categoría
-              </label>
-
-              <input
-                name="categoria"
-                maxLength={80}
-                defaultValue="general"
-                style={campo}
-              />
-
-              <label style={label}>
-                Respuesta
-              </label>
-
-              <textarea
-                name="respuesta_plantilla"
-                rows={6}
-                maxLength={5000}
-                placeholder="Escribí la respuesta que recibirá el solicitante."
-                required
-                style={textarea}
-              />
-
-              <label style={label}>
-                Prioridad
-              </label>
-
-              <input
-                name="prioridad"
-                type="number"
-                defaultValue={100}
-                style={campo}
-              />
-
-              <label style={checkboxFila}>
                 <input
-                  type="checkbox"
-                  name="requiere_intervencion"
+                  name="titulo"
+                  maxLength={150}
+                  placeholder="Ejemplo: Curso Inverter"
+                  required
+                  style={campo}
                 />
 
-                Requiere revisión
-                posterior de un
-                administrador
-              </label>
+                <label style={label}>
+                  Categoría
+                </label>
+
+                <input
+                  name="categoria"
+                  maxLength={80}
+                  defaultValue="general"
+                  style={campo}
+                />
+
+                <label style={label}>
+                  Respuesta
+                </label>
+
+                <textarea
+                  name="respuesta_plantilla"
+                  rows={7}
+                  maxLength={5000}
+                  placeholder="Escribí la respuesta que recibirá el solicitante."
+                  required
+                  style={textarea}
+                />
+
+                <label style={label}>
+                  Prioridad
+                </label>
+
+                <input
+                  name="prioridad"
+                  type="number"
+                  defaultValue={100}
+                  style={campo}
+                />
+
+                <label style={checkboxFila}>
+                  <input
+                    type="checkbox"
+                    name="requiere_intervencion"
+                  />
+
+                  Requiere revisión
+                  posterior de un
+                  administrador
+                </label>
+
+                <button
+                  type="submit"
+                  style={botonPrincipal}
+                >
+                  Crear respuesta
+                </button>
+              </form>
+            </details>
+          </section>
+        )}
+
+        {seccion === "frases" && (
+          <section style={bloque}>
+            <div style={cabeceraBloque}>
+              <div>
+                <h2 style={tituloSeccion}>
+                  Frases de detección
+                </h2>
+
+                <p style={textoAyuda}>
+                  Acá definís las
+                  diferentes maneras en
+                  que una persona puede
+                  hacer una pregunta.
+                </p>
+              </div>
+
+              <span style={contador}>
+                {cantidadFrasesActivas}
+                {" "}
+                activas
+              </span>
+            </div>
+
+            <div style={avisoSeguridad}>
+              Esta sección no modifica el
+              texto de las respuestas.
+              Solamente cambia cómo el
+              motor reconoce una consulta.
+            </div>
+
+            {respuestas
+              .filter(
+                respuesta =>
+                  !respuesta.es_fallback,
+              )
+              .map(
+                respuesta => {
+                  const frasesRespuesta =
+                    frasesPorRespuesta.get(
+                      respuesta.id,
+                    ) ?? []
+
+                  return (
+                    <details
+                      key={respuesta.id}
+                      style={respuestaCard}
+                    >
+                      <summary
+                        style={
+                          summaryRespuesta
+                        }
+                      >
+                        <div>
+                          <strong>
+                            {
+                              respuesta.titulo
+                            }
+                          </strong>
+
+                          <div style={miniTexto}>
+                            {
+                              frasesRespuesta.length
+                            }
+                            {" "}
+                            frases configuradas
+                          </div>
+                        </div>
+
+                        <span
+                          style={
+                            respuesta.activo
+                              ? pildoraOk
+                              : pildoraInactiva
+                          }
+                        >
+                          {respuesta.activo
+                            ? "RESPUESTA ACTIVA"
+                            : "RESPUESTA INACTIVA"}
+                        </span>
+                      </summary>
+
+                      <div style={respuestaContenido}>
+                        {frasesRespuesta.length ===
+                        0 ? (
+                          <div style={vacio}>
+                            Esta respuesta no
+                            tiene frases de
+                            detección.
+                          </div>
+                        ) : (
+                          frasesRespuesta.map(
+                            frase => (
+                              <div
+                                key={frase.id}
+                                style={
+                                  fraseTarjeta
+                                }
+                              >
+                                <form
+                                  action={
+                                    actualizarFrase
+                                  }
+                                  style={
+                                    formFrase
+                                  }
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      frase.id
+                                    }
+                                  />
+
+                                  <div>
+                                    <label style={label}>
+                                      Frase
+                                    </label>
+
+                                    <input
+                                      name="frase"
+                                      defaultValue={
+                                        frase.frase
+                                      }
+                                      maxLength={500}
+                                      required
+                                      style={campo}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label style={label}>
+                                      Coincidencia
+                                    </label>
+
+                                    <select
+                                      name="tipo_coincidencia"
+                                      defaultValue={
+                                        frase.tipo_coincidencia
+                                      }
+                                      style={campo}
+                                    >
+                                      <option value="contiene">
+                                        Contiene la frase
+                                      </option>
+
+                                      <option value="exacta">
+                                        Exacta
+                                      </option>
+
+                                      <option value="todas_palabras">
+                                        Todas las palabras
+                                      </option>
+                                    </select>
+                                  </div>
+
+                                  <label style={checkboxFila}>
+                                    <input
+                                      type="checkbox"
+                                      name="activo"
+                                      defaultChecked={
+                                        frase.activo
+                                      }
+                                    />
+
+                                    Activa
+                                  </label>
+
+                                  <button
+                                    type="submit"
+                                    style={
+                                      botonSecundario
+                                    }
+                                  >
+                                    Guardar frase
+                                  </button>
+                                </form>
+
+                                <form
+                                  action={
+                                    eliminarFrase
+                                  }
+                                  style={
+                                    formEliminarFrase
+                                  }
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      frase.id
+                                    }
+                                  />
+
+                                  <button
+                                    type="submit"
+                                    style={
+                                      botonPeligro
+                                    }
+                                  >
+                                    Eliminar frase
+                                  </button>
+                                </form>
+                              </div>
+                            ),
+                          )
+                        )}
+
+                        <form
+                          action={
+                            agregarFrase
+                          }
+                          style={nuevaFrase}
+                        >
+                          <input
+                            type="hidden"
+                            name="respuesta_id"
+                            value={
+                              respuesta.id
+                            }
+                          />
+
+                          <div>
+                            <label style={label}>
+                              Nueva frase
+                            </label>
+
+                            <input
+                              name="frase"
+                              maxLength={500}
+                              placeholder="Ejemplo: cuánto cuesta renovar"
+                              required
+                              style={campo}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={label}>
+                              Tipo
+                            </label>
+
+                            <select
+                              name="tipo_coincidencia"
+                              defaultValue="contiene"
+                              style={campo}
+                            >
+                              <option value="contiene">
+                                Contiene la frase
+                              </option>
+
+                              <option value="exacta">
+                                Exacta
+                              </option>
+
+                              <option value="todas_palabras">
+                                Todas las palabras
+                              </option>
+                            </select>
+                          </div>
+
+                          <button
+                            type="submit"
+                            style={
+                              botonSecundario
+                            }
+                          >
+                            Agregar frase
+                          </button>
+                        </form>
+                      </div>
+                    </details>
+                  )
+                },
+              )}
+          </section>
+        )}
+
+        {seccion === "pruebas" && (
+          <section style={bloque}>
+            <div style={cabeceraBloque}>
+              <div>
+                <h2 style={tituloSeccion}>
+                  Probar el motor
+                </h2>
+
+                <p style={textoAyuda}>
+                  Escribí una pregunta
+                  como si fueras un
+                  solicitante. La prueba
+                  no envía mensajes ni
+                  modifica ningún trámite.
+                </p>
+              </div>
+
+              <span style={etiquetaPrueba}>
+                MODO PRUEBA
+              </span>
+            </div>
+
+            <form method="get">
+              <input
+                type="hidden"
+                name="seccion"
+                value="pruebas"
+              />
+
+              <textarea
+                name="prueba"
+                rows={5}
+                maxLength={5000}
+                defaultValue={prueba}
+                placeholder="Ejemplo: Hola, ¿cuánto sale renovar mi matrícula?"
+                style={textarea}
+              />
 
               <button
                 type="submit"
                 style={botonPrincipal}
               >
-                Crear respuesta
+                Probar respuesta
               </button>
             </form>
-          </details>
-        </section>
+
+            {errorPrueba && (
+              <div style={avisoError}>
+                Error al probar el motor:
+                {" "}
+                {errorPrueba}
+              </div>
+            )}
+
+            {prueba &&
+              !errorPrueba &&
+              resultadoPrueba && (
+                <div style={resultadoPruebaCaja}>
+                  <div style={resultadoCabecera}>
+                    <div>
+                      <strong>
+                        {
+                          resultadoPrueba.titulo
+                        }
+                      </strong>
+
+                      <p style={resultadoMeta}>
+                        Código:{" "}
+                        {
+                          resultadoPrueba.codigo
+                        }
+                        {" · "}
+                        Categoría:{" "}
+                        {
+                          resultadoPrueba.categoria
+                        }
+                      </p>
+                    </div>
+
+                    <span
+                      style={
+                        resultadoPrueba.es_fallback
+                          ? pildoraAdvertencia
+                          : pildoraOk
+                      }
+                    >
+                      {resultadoPrueba.es_fallback
+                        ? "RESPALDO"
+                        : "COINCIDENCIA"}
+                    </span>
+                  </div>
+
+                  <p style={resultadoMeta}>
+                    Detectó:{" "}
+                    <strong>
+                      {resultadoPrueba.frase_detectada ??
+                        "Ninguna frase específica"}
+                    </strong>
+                  </p>
+
+                  {resultadoPrueba.tipo_coincidencia && (
+                    <p style={resultadoMeta}>
+                      Tipo:{" "}
+                      {
+                        etiquetaTipoCoincidencia(
+                          resultadoPrueba.tipo_coincidencia,
+                        )
+                      }
+                    </p>
+                  )}
+
+                  <div style={respuestaVista}>
+                    {
+                      resultadoPrueba.respuesta_renderizada
+                    }
+                  </div>
+
+                  {resultadoPrueba.requiere_intervencion && (
+                    <div style={revisionHumana}>
+                      Esta respuesta está
+                      marcada para revisión
+                      posterior de un
+                      administrador.
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {prueba &&
+              !errorPrueba &&
+              !resultadoPrueba && (
+                <div style={avisoError}>
+                  El motor no encontró una
+                  respuesta para esta
+                  consulta.
+                </div>
+              )}
+          </section>
+        )}
       </section>
     </main>
   )
@@ -1643,6 +1983,38 @@ function Resumen({
 
       <span style={resumenTexto}>
         {texto}
+      </span>
+    </div>
+  )
+}
+
+function ResumenEstado({
+  titulo,
+  activo,
+  textoActivo,
+  textoInactivo,
+}: {
+  titulo: string
+  activo: boolean
+  textoActivo: string
+  textoInactivo: string
+}) {
+  return (
+    <div style={resumenCard}>
+      <strong style={resumenEstadoTitulo}>
+        {titulo}
+      </strong>
+
+      <span
+        style={
+          activo
+            ? estadoMiniActivo
+            : estadoMiniApagado
+        }
+      >
+        {activo
+          ? textoActivo
+          : textoInactivo}
       </span>
     </div>
   )
@@ -1746,6 +2118,40 @@ const estadoApagado: CSSProperties = {
   fontWeight: 800,
 }
 
+const menuSolapas: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+  marginTop: "24px",
+}
+
+const solapa: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  padding: "13px 14px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "11px",
+  background: "white",
+  color: "#334155",
+  textDecoration: "none",
+  boxShadow:
+    "0 2px 7px rgba(15, 23, 42, 0.04)",
+}
+
+const solapaActiva: CSSProperties = {
+  border: "2px solid #0d5689",
+  background: "#eaf5fc",
+  color: "#0d5689",
+}
+
+const solapaDescripcion: CSSProperties = {
+  fontSize: "11px",
+  lineHeight: 1.35,
+  opacity: 0.8,
+}
+
 const avisoInformativo: CSSProperties = {
   marginTop: "20px",
   padding: "13px 15px",
@@ -1753,6 +2159,16 @@ const avisoInformativo: CSSProperties = {
   border: "1px solid #bae6fd",
   borderRadius: "10px",
   color: "#075985",
+  lineHeight: 1.5,
+}
+
+const avisoSeguridad: CSSProperties = {
+  marginTop: "15px",
+  padding: "12px 14px",
+  background: "#fff7ed",
+  border: "1px solid #fed7aa",
+  borderRadius: "9px",
+  color: "#9a3412",
   lineHeight: 1.5,
 }
 
@@ -1775,15 +2191,15 @@ const avisoError: CSSProperties = {
 const resumenGrid: CSSProperties = {
   display: "grid",
   gridTemplateColumns:
-    "repeat(auto-fit, minmax(160px, 1fr))",
+    "repeat(auto-fit, minmax(180px, 1fr))",
   gap: "12px",
-  marginTop: "20px",
+  marginTop: "15px",
 }
 
 const resumenCard: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "5px",
+  gap: "8px",
   padding: "16px",
   background: "white",
   border: "1px solid #dbe5ee",
@@ -1800,6 +2216,21 @@ const resumenTexto: CSSProperties = {
   fontSize: "13px",
 }
 
+const resumenEstadoTitulo: CSSProperties = {
+  color: "#334155",
+  fontSize: "14px",
+}
+
+const estadoMiniActivo: CSSProperties = {
+  color: "#166534",
+  fontWeight: 800,
+}
+
+const estadoMiniApagado: CSSProperties = {
+  color: "#991b1b",
+  fontWeight: 800,
+}
+
 const bloque: CSSProperties = {
   marginTop: "22px",
   padding: "20px",
@@ -1808,6 +2239,11 @@ const bloque: CSSProperties = {
   borderRadius: "14px",
   boxShadow:
     "0 4px 15px rgba(15, 23, 42, 0.05)",
+}
+
+const bloqueDestacado: CSSProperties = {
+  ...bloque,
+  border: "2px solid #0d5689",
 }
 
 const cabeceraBloque: CSSProperties = {
@@ -1824,16 +2260,76 @@ const tituloSeccion: CSSProperties = {
   color: "#172033",
 }
 
-const subtituloSeccion: CSSProperties = {
-  margin: "0 0 6px",
-  color: "#172033",
-  fontSize: "17px",
-}
-
 const textoAyuda: CSSProperties = {
   margin: "5px 0",
   color: "#64748b",
   lineHeight: 1.5,
+}
+
+const estadoGrandeActivo: CSSProperties = {
+  padding: "10px 15px",
+  borderRadius: "999px",
+  background: "#dcfce7",
+  color: "#166534",
+  fontSize: "13px",
+  fontWeight: 900,
+}
+
+const estadoGrandeApagado: CSSProperties = {
+  padding: "10px 15px",
+  borderRadius: "999px",
+  background: "#fee2e2",
+  color: "#991b1b",
+  fontSize: "13px",
+  fontWeight: 900,
+}
+
+const controlCaja: CSSProperties = {
+  marginTop: "20px",
+  padding: "20px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "12px",
+  background: "#f8fafc",
+  display: "flex",
+  justifyContent:
+    "space-between",
+  alignItems: "center",
+  gap: "20px",
+  flexWrap: "wrap",
+}
+
+const controlTitulo: CSSProperties = {
+  display: "block",
+  color: "#172033",
+  fontSize: "18px",
+}
+
+const controlTexto: CSSProperties = {
+  margin: "6px 0 0",
+  color: "#64748b",
+  lineHeight: 1.5,
+}
+
+const botonHabilitar: CSSProperties = {
+  border: 0,
+  borderRadius: "10px",
+  background: "#15803d",
+  color: "white",
+  padding: "13px 18px",
+  cursor: "pointer",
+  fontWeight: 900,
+  fontSize: "13px",
+}
+
+const botonDeshabilitar: CSSProperties = {
+  border: 0,
+  borderRadius: "10px",
+  background: "#b91c1c",
+  color: "white",
+  padding: "13px 18px",
+  cursor: "pointer",
+  fontWeight: 900,
+  fontSize: "13px",
 }
 
 const etiquetaPrueba: CSSProperties = {
@@ -2092,12 +2588,6 @@ const pildoraInactiva: CSSProperties = {
 
 const respuestaContenido: CSSProperties = {
   padding: "18px",
-}
-
-const frasesBloque: CSSProperties = {
-  marginTop: "25px",
-  paddingTop: "18px",
-  borderTop: "1px solid #cbd5e1",
 }
 
 const fraseTarjeta: CSSProperties = {
