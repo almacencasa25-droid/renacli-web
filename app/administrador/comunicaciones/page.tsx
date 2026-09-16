@@ -435,7 +435,7 @@ async function enviarMensajeAdministrador(formData: FormData) {
   if (mensaje) {
     eventos.push({
       consulta_id: id,
-      tipo_evento: "mensaje",
+      tipo_evento: "respuesta",
       estado_anterior: consulta.estado,
       estado_nuevo: estadoNuevo,
       descripcion: "RENACLI envió un mensaje al solicitante.",
@@ -557,7 +557,7 @@ async function pedirDocumentacionAdministrador(formData: FormData) {
     .from("historial_tramites")
     .insert({
       consulta_id: id,
-      tipo_evento: "pedido_documentacion",
+      tipo_evento: "actualizacion",
       estado_anterior: consulta.estado,
       estado_nuevo: "falta_documentacion",
       descripcion: "RENACLI solicitó documentación adicional.",
@@ -658,7 +658,7 @@ async function cerrarTramiteAdministrador(formData: FormData) {
     .from("historial_tramites")
     .insert({
       consulta_id: id,
-      tipo_evento: "cierre",
+      tipo_evento: "cambio_estado",
       estado_anterior: consulta.estado,
       estado_nuevo: "respondida",
       descripcion: "RENACLI marcó el trámite como terminado.",
