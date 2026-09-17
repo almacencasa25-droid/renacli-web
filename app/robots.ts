@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next"
 
+// Archivo robots.txt de RENACLI para buscadores
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
