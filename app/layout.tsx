@@ -6,10 +6,43 @@ import './globals.css'
 const _inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'RENACLI | Registro Nacional de Climatización y Refrigeración',
+  metadataBase: new URL('https://www.renacli.com.ar'),
+
+  title:
+    'RENACLI | Matrícula de Técnicos en Refrigeración y Climatización',
+
   description:
-    'Consulte el estado de matrícula de técnicos en refrigeración, aire acondicionado y climatización inscriptos en RENACLI.',
-  generator: 'v0.app',
+    'RENACLI es el Registro Nacional de Climatización y Refrigeración. Verificá matrículas de técnicos en refrigeración, aire acondicionado y climatización.',
+
+  applicationName: 'RENACLI',
+
+  alternates: {
+    canonical: '/',
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
+
+  openGraph: {
+    type: 'website',
+    locale: 'es_AR',
+    url: 'https://www.renacli.com.ar/',
+    siteName: 'RENACLI',
+    title:
+      'RENACLI | Matrícula de Técnicos en Refrigeración y Climatización',
+    description:
+      'Registro Nacional de Climatización y Refrigeración. Verificá el estado de matrícula de técnicos en refrigeración, aire acondicionado y climatización.',
+  },
+
   icons: {
     icon: '/icon.png',
     shortcut: '/icon.png',
