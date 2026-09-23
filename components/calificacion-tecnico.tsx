@@ -8,6 +8,7 @@ type Reputacion = {
   promedioEstrellas: number | null
   porcentajeValoracion: number | null
   mostrarPublicamente: boolean
+  estrellasManuales: number | null
 }
 
 type Props = {
@@ -32,20 +33,25 @@ export function CalificacionTecnico({
       promedioEstrellas: null,
       porcentajeValoracion: null,
       mostrarPublicamente: false,
+      estrellasManuales: null,
     }
   )
 
   const valorVisual = hover || puntuacion
 
   const estrellasPromedio = useMemo(() => {
-    if (
-      !reputacion.mostrarPublicamente ||
-      reputacion.promedioEstrellas == null
-    ) {
-      return 0
+    if (reputacion.mostrarPublicamente) {
+      return reputacion.promedioEstrellas == null
+        ? 0
+        : Math.max(
+            0,
+            Math.min(5, reputacion.promedioEstrellas)
+          )
     }
 
-    return Math.max(0, Math.min(5, reputacion.promedioEstrellas))
+    return reputacion.estrellasManuales == null
+      ? 0
+      : Math.max(0, Math.min(5, reputacion.estrellasManuales))
   }, [reputacion])
 
   async function enviarCalificacion(
@@ -253,7 +259,8 @@ export function CalificacionTecnico({
           Reputación pública
         </p>
 
-        {reputacion.mostrarPublicamente ? (
+        {reputacion.mostrarPublicamente ||
+        reputacion.estrellasManuales != null ? (
           <div className="mt-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1">
@@ -266,7 +273,9 @@ export function CalificacionTecnico({
                       key={valor}
                       className={`size-6 ${
                         activa
-                          ? "fill-yellow-400 text-yellow-400"
+                          ? reputacion.mostrarPublicamente
+                            ? "fill-amber-500 text-amber-600"
+                            : "fill-yellow-400 text-yellow-400"
                           : "text-muted-foreground/35"
                       }`}
                       strokeWidth={1.5}
@@ -277,17 +286,27 @@ export function CalificacionTecnico({
               </div>
 
               <span className="text-sm font-bold text-foreground">
-                {reputacion.promedioEstrellas?.toFixed(2)} / 5
+                {reputacion.mostrarPublicamente
+                  ? reputacion.promedioEstrellas?.toFixed(2)
+                  : reputacion.estrellasManuales} / 5
               </span>
 
-              <span className="text-sm font-semibold text-primary">
-                {reputacion.porcentajeValoracion}% positivo
-              </span>
+              {reputacion.mostrarPublicamente ? (
+                <span className="text-sm font-semibold text-primary">
+                  {reputacion.porcentajeValoracion}% positivo
+                </span>
+              ) : null}
             </div>
 
-            <p className="mt-2 text-xs text-muted-foreground">
-              Basado en {reputacion.totalCalificaciones} calificaciones.
-            </p>
+            {reputacion.mostrarPublicamente ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Basado en {reputacion.totalCalificaciones} calificaciones.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Valoración asignada por RENACLI.
+              </p>
+            )}
           </div>
         ) : (
           <div className="mt-3 rounded-lg border border-border bg-muted/40 px-4 py-3">

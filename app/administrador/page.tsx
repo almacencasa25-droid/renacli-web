@@ -33,6 +33,7 @@ type MatriculadoAdmin = {
   fecha_aceptacion_terminos: string | null
   version_reglamento: string | null
   version_privacidad: string | null
+  estrellas_manuales: number | null
 }
 
 type DocumentoPdfRenacli = {
@@ -1054,6 +1055,64 @@ async function cambiarCategoriaTecnica(
   )
 }
 
+async function guardarEstrellasManuales(
+  formData: FormData
+) {
+  "use server"
+
+  if (!(await estaAutorizado())) {
+    redirect("/administrador")
+  }
+
+  const id = Number(formData.get("id"))
+  const q = String(formData.get("q") ?? "").trim()
+  const estrellas = Number(
+    formData.get("estrellas_manuales") ?? 0
+  )
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0 ||
+    !Number.isInteger(estrellas) ||
+    estrellas < 0 ||
+    estrellas > 5
+  ) {
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=estrellas`
+    )
+  }
+
+  const supabase = obtenerSupabaseAdmin()
+  const { error } = await supabase
+    .from("matriculados")
+    .update({
+      estrellas_manuales:
+        estrellas === 0 ? null : estrellas,
+    })
+    .eq("id", id)
+
+  if (error) {
+    console.error(
+      "[RENACLI] Error guardando estrellas manuales:",
+      error
+    )
+
+    redirect(
+      `/administrador?buscar=1&q=${encodeURIComponent(
+        q
+      )}&error=estrellas`
+    )
+  }
+
+  redirect(
+    `/administrador?buscar=1&q=${encodeURIComponent(
+      q
+    )}&mensaje=estrellas`
+  )
+}
+
 
 async function renovarMatriculado(
   formData: FormData
@@ -1364,7 +1423,8 @@ async function buscarMatriculados(
         autoriza_publicacion,
         fecha_aceptacion_terminos,
         version_reglamento,
-        version_privacidad
+        version_privacidad,
+        estrellas_manuales
       `
     )
     .or(
@@ -1604,6 +1664,8 @@ type Props = {
     mensaje?: string
     liberado?: string
     listado?: string
+    config_guardada?: string
+    config_error?: string
   }>
 }
 
@@ -2158,6 +2220,22 @@ export default async function AdministradorPage({
           "categoria" && (
           <Aviso
             texto="No fue posible actualizar la categoría técnica."
+            tipo="error"
+          />
+        )}
+
+        {parametros.mensaje ===
+          "estrellas" && (
+          <Aviso
+            texto="Estrellas del matriculado actualizadas correctamente."
+            tipo="ok"
+          />
+        )}
+
+        {parametros.error ===
+          "estrellas" && (
+          <Aviso
+            texto="No fue posible actualizar las estrellas del matriculado."
             tipo="error"
           />
         )}
@@ -3384,6 +3462,91 @@ export default async function AdministradorPage({
                         )}
                       />
                     </div>
+
+                    {!baja && (
+                      <form
+                        action={guardarEstrellasManuales}
+                        style={{
+                          marginTop: "22px",
+                          padding: "16px",
+                          border: "1px solid #fde68a",
+                          borderRadius: "12px",
+                          background: "#fffbeb",
+                        }}
+                      >
+                        <input
+                          type="hidden"
+                          name="id"
+                          value={matriculado.id}
+                        />
+
+                        <input
+                          type="hidden"
+                          name="q"
+                          value={terminoBusqueda}
+                        />
+
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#172033",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          Estrellas provisorias
+                        </div>
+
+                        <p
+                          style={{
+                            margin: "0 0 12px",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Las elegís manualmente y se muestran hasta que el técnico alcanza el mínimo de calificaciones reales. Después se reemplazan automáticamente por el promedio de los clientes.
+                        </p>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <select
+                            name="estrellas_manuales"
+                            defaultValue={
+                              matriculado.estrellas_manuales ?? 0
+                            }
+                            style={{
+                              minWidth: "210px",
+                              padding: "11px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #d97706",
+                              background: "white",
+                              color: "#172033",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            <option value="0">Sin estrellas provisorias</option>
+                            <option value="1">★☆☆☆☆ — 1 estrella</option>
+                            <option value="2">★★☆☆☆ — 2 estrellas</option>
+                            <option value="3">★★★☆☆ — 3 estrellas</option>
+                            <option value="4">★★★★☆ — 4 estrellas</option>
+                            <option value="5">★★★★★ — 5 estrellas</option>
+                          </select>
+
+                          <button
+                            type="submit"
+                            style={botonAmarillo}
+                          >
+                            Guardar estrellas
+                          </button>
+                        </div>
+                      </form>
+                    )}
 
                     {!baja && (
                       <form

@@ -20,6 +20,7 @@ async function obtenerReputacion(matriculadoId: number) {
       promedioEstrellas: null,
       porcentajeValoracion: null,
       mostrarPublicamente: false,
+      estrellasManuales: null,
     }
   }
 
@@ -30,13 +31,22 @@ async function obtenerReputacion(matriculadoId: number) {
     },
   })
 
-  const { data, error } = await supabase
-    .from("reputacion_matriculados")
-    .select(
-      "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
-    )
-    .eq("matriculado_id", matriculadoId)
-    .maybeSingle()
+  const [resultadoReputacion, resultadoEstrellas] = await Promise.all([
+    supabase
+      .from("reputacion_matriculados")
+      .select(
+        "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
+      )
+      .eq("matriculado_id", matriculadoId)
+      .maybeSingle(),
+    supabase
+      .from("matriculados")
+      .select("estrellas_manuales")
+      .eq("id", matriculadoId)
+      .maybeSingle(),
+  ])
+
+  const { data, error } = resultadoReputacion
 
   if (error) {
     console.error("Error obteniendo reputación RENACLI:", error)
@@ -46,6 +56,7 @@ async function obtenerReputacion(matriculadoId: number) {
       promedioEstrellas: null,
       porcentajeValoracion: null,
       mostrarPublicamente: false,
+      estrellasManuales: null,
     }
   }
 
@@ -61,6 +72,10 @@ async function obtenerReputacion(matriculadoId: number) {
         : Number(data.porcentaje_valoracion),
     mostrarPublicamente:
       data?.mostrar_publicamente === true,
+    estrellasManuales:
+      resultadoEstrellas.data?.estrellas_manuales == null
+        ? null
+        : Number(resultadoEstrellas.data.estrellas_manuales),
   }
 }
 
@@ -127,7 +142,6 @@ export default async function FichaPage({ params }: Props) {
               <FichaMatriculado matriculado={matriculado} />
 
               <CalificacionTecnico
-                matriculadoId={Number(matriculado.id)}
                 matricula={matriculado.matricula}
                 reputacionInicial={
                   reputacion ?? {
@@ -135,6 +149,7 @@ export default async function FichaPage({ params }: Props) {
                     promedioEstrellas: null,
                     porcentajeValoracion: null,
                     mostrarPublicamente: false,
+                    estrellasManuales: null,
                   }
                 }
               />

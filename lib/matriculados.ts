@@ -33,6 +33,9 @@ export type EstadoMatricula =
 export type TipoBusqueda = "matricula" | "dni"
 
 export type MatriculadoPublico = {
+  /** Identificador interno utilizado solo por el servidor. */
+  id: number
+
   /** Número de matrícula público. También se utiliza para el QR. */
   matricula: string
   apellido: string
@@ -94,6 +97,7 @@ export const ESTADOS: Record<
  */
 export const MATRICULADOS_EJEMPLO: MatriculadoPublico[] = [
   {
+    id: 1,
     matricula: "RENACLI-000001",
     apellido: "Ejemplo",
     nombre: "Técnico Uno",
@@ -399,6 +403,8 @@ async function mapearFila(
   }
 
   return {
+    id: Number(fila["id"] ?? 0),
+
     matricula: primerValor(fila, [
       "numero_matricula",
       "matricula",

@@ -187,14 +187,24 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: reputacion, error: errorReputacion } =
-      await supabase
+    const [resultadoReputacion, resultadoEstrellas] =
+      await Promise.all([
+        supabase
         .from("reputacion_matriculados")
         .select(
           "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
         )
         .eq("matriculado_id", matriculado.id)
-        .maybeSingle()
+        .maybeSingle(),
+        supabase
+          .from("matriculados")
+          .select("estrellas_manuales")
+          .eq("id", matriculado.id)
+          .maybeSingle(),
+      ])
+
+    const { data: reputacion, error: errorReputacion } =
+      resultadoReputacion
 
     if (errorReputacion) {
       console.error(
@@ -223,6 +233,12 @@ export async function POST(request: Request) {
               ),
         mostrarPublicamente:
           reputacion?.mostrar_publicamente === true,
+        estrellasManuales:
+          resultadoEstrellas.data?.estrellas_manuales == null
+            ? null
+            : Number(
+                resultadoEstrellas.data.estrellas_manuales
+              ),
       },
     })
   } catch (error) {

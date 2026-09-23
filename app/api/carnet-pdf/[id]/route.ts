@@ -136,12 +136,12 @@ function obtenerEstadoEfectivo(
   return estadoNormalizado
 }
 
-function fechaHoraArgentina() {
+function fechaHoraArgentina(fecha = new Date()) {
   return new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     dateStyle: "short",
     timeStyle: "medium",
-  }).format(new Date())
+  }).format(fecha)
 }
 
 function crearSello(payload: string) {
