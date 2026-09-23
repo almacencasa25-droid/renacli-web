@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
+import { Star } from "lucide-react"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { crearUrlFirmadaFoto } from "@/lib/fotos"
@@ -29,6 +30,72 @@ type CredencialQr = {
   fecha_liberacion: string | null
   acreditacion_actual: boolean | null
   autoriza_publicacion: boolean | null
+}
+
+type ReputacionQr = {
+  totalCalificaciones: number
+  promedioEstrellas: number | null
+  porcentajeValoracion: number | null
+  mostrarPublicamente: boolean
+  estrellasManuales: number | null
+}
+
+async function obtenerReputacionQr(
+  supabase: ReturnType<typeof obtenerSupabaseAdmin>,
+  numeroMatricula: string | null
+): Promise<ReputacionQr | null> {
+  if (!numeroMatricula) return null
+
+  const { data: matriculado, error: errorMatriculado } =
+    await supabase
+      .from("matriculados")
+      .select("id, estrellas_manuales")
+      .eq("numero_matricula", numeroMatricula)
+      .maybeSingle()
+
+  if (errorMatriculado || !matriculado) {
+    console.error(
+      "Error obteniendo matriculado para reputación QR:",
+      errorMatriculado
+    )
+    return null
+  }
+
+  const { data: reputacion, error: errorReputacion } =
+    await supabase
+      .from("reputacion_matriculados")
+      .select(
+        "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
+      )
+      .eq("matriculado_id", matriculado.id)
+      .maybeSingle()
+
+  if (errorReputacion) {
+    console.error(
+      "Error obteniendo reputación para verificación QR:",
+      errorReputacion
+    )
+  }
+
+  return {
+    totalCalificaciones: Number(
+      reputacion?.total_calificaciones ?? 0
+    ),
+    promedioEstrellas:
+      reputacion?.promedio_estrellas == null
+        ? null
+        : Number(reputacion.promedio_estrellas),
+    porcentajeValoracion:
+      reputacion?.porcentaje_valoracion == null
+        ? null
+        : Number(reputacion.porcentaje_valoracion),
+    mostrarPublicamente:
+      reputacion?.mostrar_publicamente === true,
+    estrellasManuales:
+      matriculado.estrellas_manuales == null
+        ? null
+        : Number(matriculado.estrellas_manuales),
+  }
 }
 
 function fechaHoyArgentina() {
@@ -230,6 +297,18 @@ export default async function VerificarCodigoPage({
   const credencial =
     data[0] as CredencialQr
 
+  const reputacion = await obtenerReputacionQr(
+    supabase,
+    credencial.numero_matricula
+  )
+
+  const valorEstrellas = reputacion?.mostrarPublicamente
+    ? reputacion.promedioEstrellas
+    : reputacion?.estrellasManuales
+
+  const mostrarEstrellas =
+    valorEstrellas != null && valorEstrellas > 0
+
   const acreditacionActual =
     Boolean(
       credencial
@@ -356,6 +435,54 @@ export default async function VerificarCodigoPage({
                   </p>
                 </div>
               </div>
+
+              {mostrarEstrellas ? (
+                <div className="mt-6 border-t border-border pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Valoración del técnico
+                  </p>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <div
+                      className="flex items-center gap-1"
+                      aria-label={`${valorEstrellas} de 5 estrellas`}
+                    >
+                      {[1, 2, 3, 4, 5].map(valor => (
+                        <Star
+                          key={valor}
+                          className={`size-6 ${
+                            valor <= Math.round(valorEstrellas)
+                              ? reputacion?.mostrarPublicamente
+                                ? "fill-amber-500 text-amber-600"
+                                : "fill-yellow-400 text-yellow-400"
+                              : "text-muted-foreground/35"
+                          }`}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </div>
+
+                    <span className="text-sm font-bold text-foreground">
+                      {reputacion?.mostrarPublicamente
+                        ? valorEstrellas.toFixed(2)
+                        : valorEstrellas} / 5
+                    </span>
+
+                    {reputacion?.mostrarPublicamente ? (
+                      <span className="text-sm font-semibold text-primary">
+                        {reputacion.porcentajeValoracion}% positivo
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {reputacion?.mostrarPublicamente
+                      ? `Basado en ${reputacion.totalCalificaciones} calificaciones.`
+                      : "Valoración asignada por RENACLI."}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {autorizaPublicacion ? (

@@ -13,7 +13,7 @@ type Props = { params: Promise<{ matricula: string }> }
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
 
-async function obtenerReputacion(matriculadoId: number) {
+async function obtenerReputacion(numeroMatricula: string) {
   if (!supabaseUrl || !supabaseSecretKey) {
     return {
       totalCalificaciones: 0,
@@ -31,22 +31,35 @@ async function obtenerReputacion(matriculadoId: number) {
     },
   })
 
-  const [resultadoReputacion, resultadoEstrellas] = await Promise.all([
-    supabase
+  const { data: matriculado, error: errorMatriculado } =
+    await supabase
+      .from("matriculados")
+      .select("id, estrellas_manuales")
+      .eq("numero_matricula", numeroMatricula)
+      .maybeSingle()
+
+  if (errorMatriculado || !matriculado) {
+    console.error(
+      "Error obteniendo matriculado para reputación RENACLI:",
+      errorMatriculado
+    )
+
+    return {
+      totalCalificaciones: 0,
+      promedioEstrellas: null,
+      porcentajeValoracion: null,
+      mostrarPublicamente: false,
+      estrellasManuales: null,
+    }
+  }
+
+  const { data, error } = await supabase
       .from("reputacion_matriculados")
       .select(
         "total_calificaciones, promedio_estrellas, porcentaje_valoracion, mostrar_publicamente"
       )
-      .eq("matriculado_id", matriculadoId)
-      .maybeSingle(),
-    supabase
-      .from("matriculados")
-      .select("estrellas_manuales")
-      .eq("id", matriculadoId)
-      .maybeSingle(),
-  ])
-
-  const { data, error } = resultadoReputacion
+      .eq("matriculado_id", matriculado.id)
+      .maybeSingle()
 
   if (error) {
     console.error("Error obteniendo reputación RENACLI:", error)
@@ -73,9 +86,9 @@ async function obtenerReputacion(matriculadoId: number) {
     mostrarPublicamente:
       data?.mostrar_publicamente === true,
     estrellasManuales:
-      resultadoEstrellas.data?.estrellas_manuales == null
+      matriculado.estrellas_manuales == null
         ? null
-        : Number(resultadoEstrellas.data.estrellas_manuales),
+        : Number(matriculado.estrellas_manuales),
   }
 }
 
@@ -112,7 +125,7 @@ export default async function FichaPage({ params }: Props) {
   const matriculado = await obtenerMatriculado(matricula)
 
   const reputacion = matriculado
-    ? await obtenerReputacion(Number(matriculado.id))
+    ? await obtenerReputacion(matriculado.matricula)
     : null
 
   return (
