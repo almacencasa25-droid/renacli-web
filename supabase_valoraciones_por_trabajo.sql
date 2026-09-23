@@ -101,7 +101,36 @@ begin
 end;
 $$;
 
+create or replace function public.obtener_solicitud_valoracion_trabajo(
+  p_codigo uuid
+)
+returns table(
+  matriculado_id bigint,
+  vence_en timestamptz,
+  utilizado_en timestamptz,
+  apellido_nombre text,
+  numero_matricula text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    s.matriculado_id,
+    s.vence_en,
+    s.utilizado_en,
+    m.apellido_nombre,
+    m.numero_matricula
+  from public.solicitudes_valoracion_trabajo s
+  join public.matriculados m on m.id = s.matriculado_id
+  where s.codigo = p_codigo
+  limit 1;
+$$;
+
 revoke all on function public.crear_solicitud_valoracion_trabajo(bigint) from public, anon, authenticated;
 revoke all on function public.registrar_valoracion_trabajo(uuid, smallint, text, text) from public, anon, authenticated;
+revoke all on function public.obtener_solicitud_valoracion_trabajo(uuid) from public;
 grant execute on function public.crear_solicitud_valoracion_trabajo(bigint) to service_role;
 grant execute on function public.registrar_valoracion_trabajo(uuid, smallint, text, text) to service_role;
+grant execute on function public.obtener_solicitud_valoracion_trabajo(uuid) to anon, authenticated, service_role;

@@ -7,21 +7,27 @@ export default async function ValorarTrabajoPage({ params }: Props) {
   const { codigo } = await params
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseSecret = process.env.SUPABASE_SECRET_KEY
-  let solicitud: { matriculado_id: number; vence_en: string; utilizado_en: string | null } | null = null
-  let tecnico: { apellido_nombre: string; numero_matricula: string } | null = null
+  let solicitud: {
+    matriculado_id: number
+    vence_en: string
+    utilizado_en: string | null
+    apellido_nombre: string
+    numero_matricula: string
+  } | null = null
 
   if (supabaseUrl && supabaseSecret) {
     const supabase = createClient(supabaseUrl, supabaseSecret, { auth: { persistSession: false } })
-    const resultado = await supabase.from("solicitudes_valoracion_trabajo").select("matriculado_id, vence_en, utilizado_en").eq("codigo", codigo).maybeSingle()
-    solicitud = resultado.data
-    if (solicitud) {
-      const resultadoTecnico = await supabase.from("matriculados").select("apellido_nombre, numero_matricula").eq("id", solicitud.matriculado_id).maybeSingle()
-      tecnico = resultadoTecnico.data
-    }
+    const resultado = await supabase.rpc(
+      "obtener_solicitud_valoracion_trabajo",
+      { p_codigo: codigo }
+    )
+    solicitud = Array.isArray(resultado.data)
+      ? resultado.data[0] ?? null
+      : null
   }
 
   const vencida = solicitud ? new Date(solicitud.vence_en).getTime() <= Date.now() : false
-  const disponible = Boolean(solicitud && tecnico && !solicitud.utilizado_en && !vencida)
+  const disponible = Boolean(solicitud && !solicitud.utilizado_en && !vencida)
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8">
@@ -32,11 +38,11 @@ export default async function ValorarTrabajoPage({ params }: Props) {
           <p className="mt-1 text-xs font-semibold tracking-wide">VALORACIÓN DE TRABAJO</p>
         </header>
         <div className="p-6">
-          {tecnico ? (
+          {solicitud ? (
             <div className="mb-6 border-b border-slate-200 pb-5 text-center">
               <p className="text-sm text-slate-500">Trabajo realizado por</p>
-              <h2 className="mt-1 text-xl font-bold text-slate-900">{tecnico.apellido_nombre}</h2>
-              <p className="mt-1 font-bold text-green-700">{tecnico.numero_matricula}</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">{solicitud.apellido_nombre}</h2>
+              <p className="mt-1 font-bold text-green-700">{solicitud.numero_matricula}</p>
             </div>
           ) : null}
           {disponible ? <FormularioValoracion codigo={codigo} /> : (
