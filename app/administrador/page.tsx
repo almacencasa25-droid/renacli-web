@@ -48,6 +48,13 @@ type DocumentoPdfRenacli = {
   activo: boolean
 }
 
+type ReputacionMatriculado = {
+  matriculado_id: number
+  total_calificaciones: number
+  promedio_estrellas: number | null
+  mostrar_publicamente: boolean
+}
+
 
 function obtenerTokenAdministrador() {
   const password = process.env.RENACLI_ADMIN_PASSWORD
@@ -1899,6 +1906,9 @@ export default async function AdministradorPage({
   const documentosPorMatriculado =
     new Map<number, DocumentoPdfRenacli[]>()
 
+  const reputacionPorMatriculado =
+    new Map<number, ReputacionMatriculado>()
+
   if (resultados.length > 0) {
     const idsResultados =
       resultados.map(
@@ -1907,6 +1917,33 @@ export default async function AdministradorPage({
 
     const supabaseDocumentos =
       obtenerSupabaseAdmin()
+
+    const {
+      data: reputacionesData,
+      error: errorReputaciones,
+    } = await supabaseDocumentos
+      .from("reputacion_matriculados")
+      .select(
+        "matriculado_id, total_calificaciones, promedio_estrellas, mostrar_publicamente"
+      )
+      .in("matriculado_id", idsResultados)
+
+    if (errorReputaciones) {
+      console.error(
+        "[RENACLI] Error obteniendo reputación de matriculados:",
+        errorReputaciones
+      )
+    } else {
+      for (
+        const reputacion of
+        (reputacionesData ?? []) as ReputacionMatriculado[]
+      ) {
+        reputacionPorMatriculado.set(
+          reputacion.matriculado_id,
+          reputacion
+        )
+      }
+    }
 
     const {
       data: documentosPdf,
@@ -3095,6 +3132,23 @@ export default async function AdministradorPage({
                     matriculado.id
                   ) ?? []
 
+                const reputacion =
+                  reputacionPorMatriculado.get(
+                    matriculado.id
+                  )
+
+                const usaValoracionReal =
+                  reputacion?.mostrar_publicamente === true &&
+                  reputacion.promedio_estrellas != null
+
+                const valorEstrellas = usaValoracionReal
+                  ? Number(reputacion?.promedio_estrellas ?? 0)
+                  : Number(matriculado.estrellas_manuales ?? 0)
+
+                const totalComentarios = Number(
+                  reputacion?.total_calificaciones ?? 0
+                )
+
                 return (
                   <div
                     key={
@@ -3118,6 +3172,72 @@ export default async function AdministradorPage({
                           "SIN MATRÍCULA"}
                       </strong>
                     </p>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                        margin: "12px 0 18px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          padding: "8px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #fde68a",
+                          background: "#fffbeb",
+                        }}
+                        aria-label={`${valorEstrellas.toFixed(1)} de 5 estrellas`}
+                      >
+                        {[1, 2, 3, 4, 5].map(estrella => (
+                          <span
+                            key={estrella}
+                            style={{
+                              color:
+                                estrella <= Math.round(valorEstrellas)
+                                  ? usaValoracionReal
+                                    ? "#d97706"
+                                    : "#facc15"
+                                  : "#cbd5e1",
+                              fontSize: "21px",
+                              lineHeight: 1,
+                            }}
+                          >
+                            ★
+                          </span>
+                        ))}
+
+                        <strong
+                          style={{
+                            marginLeft: "6px",
+                            color: "#475569",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {valorEstrellas > 0
+                            ? `${valorEstrellas.toFixed(
+                                usaValoracionReal ? 2 : 0
+                              )} / 5`
+                            : "Sin valoración"}
+                        </strong>
+                      </div>
+
+                      <a
+                        href={`/administrador/comunicaciones?tab=calificaciones&tecnico=${matriculado.id}#tecnico-${matriculado.id}`}
+                        style={{
+                          ...botonBlanco,
+                          padding: "9px 13px",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Ver comentarios ({totalComentarios})
+                      </a>
+                    </div>
 
                     <div
                       style={{
