@@ -2523,8 +2523,20 @@ function CalificacionCard({
           valor={calificacion.nombre_cliente || "No informado"}
         />
         <Dato
-          etiqueta="Correo"
-          valor={calificacion.email_cliente}
+          etiqueta={
+            calificacion.email_cliente.endsWith(
+              "@valoracion.renacli.local"
+            )
+              ? "Origen"
+              : "Correo"
+          }
+          valor={
+            calificacion.email_cliente.endsWith(
+              "@valoracion.renacli.local"
+            )
+              ? "QR de trabajo"
+              : calificacion.email_cliente
+          }
         />
       </div>
 
