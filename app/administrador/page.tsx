@@ -664,6 +664,28 @@ async function guardarClaveAppTecnico(
   }
 }
 
+async function guardarLogoRenacli(formData: FormData) {
+  "use server"
+  if (!(await estaAutorizado())) redirect("/administrador")
+  const archivo = formData.get("logo")
+  if (!(archivo instanceof File) || archivo.size === 0 || archivo.size > 2 * 1024 * 1024 || archivo.type !== "image/png") {
+    redirect("/administrador?logo_error=tipo")
+  }
+  const bytes = new Uint8Array(await archivo.arrayBuffer())
+  if (bytes.length < 24 || bytes[0] !== 137 || bytes[1] !== 80 || bytes[2] !== 78 || bytes[3] !== 71) {
+    redirect("/administrador?logo_error=tipo")
+  }
+  const supabase = obtenerSupabaseAdmin()
+  const { error } = await supabase.storage.from("fotos-matriculados").upload(
+    "identidad-visual/logo-actual.png", bytes, { contentType: "image/png", upsert: true, cacheControl: "0" }
+  )
+  if (error) {
+    console.error("[RENACLI] Error guardando logo:", error)
+    redirect("/administrador?logo_error=subida")
+  }
+  redirect("/administrador?logo_guardado=1")
+}
+
 async function guardarConfiguracionPublica(
   formData: FormData
 ) {
@@ -2372,6 +2394,27 @@ export default async function AdministradorPage({
             tipo="error"
           />
         )}
+
+        <details style={{ ...tarjeta, marginBottom: "24px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "18px", color: "#172033" }}>
+            Identidad visual — Logo RENACLI
+          </summary>
+          <p style={{ color: "#64748b", marginTop: "14px", lineHeight: 1.5 }}>
+            Subí un PNG con fondo transparente. Se ajustará automáticamente al encabezado sin deformarse.
+            El cambio no requiere modificar el código.
+          </p>
+          {parametros.logo_guardado === "1" && <Aviso texto="Logo actualizado correctamente." tipo="ok" />}
+          {parametros.logo_error && <Aviso texto="No se pudo guardar el logo. Usá un PNG válido de hasta 2 MB." tipo="error" />}
+          <div style={{ padding: "12px", background: "#104875", borderRadius: "10px", marginBottom: "14px", display: "inline-block" }}>
+            <img src="/api/identidad/logo" alt="Logo actual RENACLI (si ya fue cargado)" style={{ maxWidth: "300px", maxHeight: "100px", objectFit: "contain" }} />
+          </div>
+          <form action={guardarLogoRenacli} encType="multipart/form-data" style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+            <input name="logo" type="file" accept="image/png" required style={{ maxWidth: "100%" }} />
+            <button type="submit" style={{ padding: "12px 20px", borderRadius: "8px", background: "#0d74bc", color: "white", border: 0, cursor: "pointer", fontWeight: "bold" }}>
+              Guardar y aplicar logo
+            </button>
+          </form>
+        </details>
 
         <details
           style={{
