@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Menu, Snowflake, X } from "lucide-react"
+import { Menu, X } from "lucide-react"
 import { useState } from "react"
 
 export function SiteHeader() {
@@ -20,25 +20,26 @@ export function SiteHeader() {
           onClick={cerrarMenu}
           className="flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary sm:gap-4"
         >
-          <span
-            aria-hidden="true"
-            className="flex size-11 shrink-0 items-center justify-center rounded-md border border-primary-foreground/25 bg-primary-foreground/10 sm:size-12"
-          >
-            <Snowflake
-              className="size-6 text-accent sm:size-7"
-              strokeWidth={1.75}
-            />
-          </span>
-
-          <span className="flex min-w-0 flex-col">
-            <span className="text-xl font-bold leading-none tracking-[0.18em] sm:text-2xl">
-              RENACLI
-            </span>
-
-            <span className="mt-1.5 hidden text-[11px] font-medium leading-snug text-primary-foreground/75 text-pretty sm:block sm:text-sm">
-              Registro Nacional de
-              Climatización y Refrigeración
-            </span>
+          <span className="block w-[min(62vw,260px)] sm:w-[330px]" aria-label="RENACLI — Registro Nacional de Climatización y Refrigeración">
+            <svg viewBox="0 0 430 108" className="block h-auto w-full overflow-visible" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="renacli-azul" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#087bf3" />
+                  <stop offset="100%" stopColor="#25e5f1" />
+                </linearGradient>
+              </defs>
+              <g fill="#ffffff" fontFamily="Arial, Helvetica, sans-serif" fontSize="62" fontWeight="900" letterSpacing="-3">
+                <text x="0" y="65">REN</text>
+                <text x="258" y="65">CLI</text>
+              </g>
+              <path d="M190 65 L220 5 L242 5 L272 65 L251 65 L231 25 L211 65 Z" fill="url(#renacli-azul)" />
+              <g transform="translate(231 52)" stroke="#ffffff" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M0 -11 V11 M-10 0 H10 M-7.5 -7.5 L7.5 7.5 M7.5 -7.5 L-7.5 7.5" />
+              </g>
+              <rect x="190" y="75" width="83" height="4" fill="url(#renacli-azul)" />
+              <text x="215" y="94" textAnchor="middle" fill="#ffffff" fontFamily="Arial, Helvetica, sans-serif" fontSize="9.5" letterSpacing="2.3">REGISTRO NACIONAL DE</text>
+              <text x="215" y="106" textAnchor="middle" fill="#ffffff" fontFamily="Arial, Helvetica, sans-serif" fontSize="9.5" letterSpacing="1.45">CLIMATIZACIÓN Y REFRIGERACIÓN</text>
+            </svg>
           </span>
         </Link>
 
