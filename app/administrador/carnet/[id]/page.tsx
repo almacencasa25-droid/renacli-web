@@ -371,24 +371,12 @@ export default async function CarnetPage({
           <header className="border-b border-slate-200 px-7 py-7 sm:px-10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div
-                  className={`flex h-16 w-16 items-center justify-center rounded-2xl text-3xl font-black text-white ${estiloCategoria.logo}`}
-                >
-                  R
-                </div>
-
-                <div>
-                  <h1
-                    className={`text-4xl font-black tracking-wide ${estiloCategoria.titulo}`}
-                  >
-                    RENACLI
-                  </h1>
-
-                  <p className="mt-1 text-sm font-bold uppercase tracking-wider text-slate-600">
-                    Registro Nacional de
-                    Climatización y
-                    Refrigeración
-                  </p>
+                <div className="rounded-xl bg-blue-950 px-3 py-2">
+                  <img
+                    src="/api/identidad/logo"
+                    alt="Logo RENACLI"
+                    className="block h-auto max-h-20 w-auto max-w-[min(52vw,250px)] object-contain"
+                  />
                 </div>
               </div>
 
