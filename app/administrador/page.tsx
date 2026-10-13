@@ -686,6 +686,31 @@ async function guardarLogoRenacli(formData: FormData) {
   redirect(`/administrador?logo_guardado=1&logo_version=${Date.now()}`)
 }
 
+async function guardarIconoCredencial(formData: FormData) {
+  "use server"
+  if (!(await estaAutorizado())) redirect("/administrador")
+  const archivo = formData.get("icono")
+  if (!(archivo instanceof File) || archivo.size === 0 || archivo.size > 2 * 1024 * 1024 || archivo.type !== "image/png") {
+    redirect("/administrador?icono_error=tipo")
+  }
+  const bytes = new Uint8Array(await archivo.arrayBuffer())
+  if (bytes.length < 24 || bytes[0] !== 137 || bytes[1] !== 80 || bytes[2] !== 78 || bytes[3] !== 71) {
+    redirect("/administrador?icono_error=tipo")
+  }
+  const vista = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const ancho = vista.getUint32(16)
+  const alto = vista.getUint32(20)
+  if (ancho !== alto || ancho < 192 || ancho > 2048) redirect("/administrador?icono_error=dimensiones")
+  const supabase = obtenerSupabaseAdmin()
+  const { error } = await supabase.storage.from("fotos-matriculados").upload(
+    `identidad-visual/icono-credencial-${Date.now()}-${crypto.randomUUID()}.png`,
+    bytes,
+    { contentType: "image/png", upsert: false, cacheControl: "0" }
+  )
+  if (error) redirect("/administrador?icono_error=subida")
+  redirect(`/administrador?icono_guardado=1&icono_version=${Date.now()}`)
+}
+
 async function guardarConfiguracionPublica(
   formData: FormData
 ) {
@@ -2423,6 +2448,27 @@ export default async function AdministradorPage({
             />
             <button type="submit" style={{ padding: "14px 20px", minHeight: "48px", borderRadius: "8px", background: "#0d74bc", color: "white", border: 0, cursor: "pointer", fontWeight: "bold" }}>
               Guardar y aplicar logo
+            </button>
+          </form>
+        </details>
+
+        <details style={{ ...tarjeta, marginBottom: "24px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "18px", color: "#172033" }}>
+            Ícono de la aplicación RENACLI Credencial
+          </summary>
+          <p style={{ color: "#64748b", marginTop: "14px", lineHeight: 1.5 }}>
+            Elegí una imagen PNG cuadrada de 192 a 2048 píxeles y hasta 2 MB.
+            Se aplicará a las nuevas instalaciones. Android puede conservar el ícono anterior en aplicaciones ya instaladas.
+          </p>
+          {parametros.icono_guardado === "1" && <Aviso texto="Ícono guardado. Las nuevas instalaciones utilizarán la imagen actualizada." tipo="ok" />}
+          {parametros.icono_error && <Aviso texto="No se pudo guardar. Usá un PNG cuadrado de 192 a 2048 píxeles, máximo 2 MB." tipo="error" />}
+          <div style={{ marginBottom: "14px" }}>
+            <img src={`/api/identidad/icono-credencial?v=${parametros.icono_version || "actual"}`} alt="Ícono actual de la aplicación" style={{ width: "96px", height: "96px", borderRadius: "20px", objectFit: "contain", background: "#0b3553" }} />
+          </div>
+          <form action={guardarIconoCredencial} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "14px" }}>
+            <input name="icono" type="file" accept=".png,image/png" required aria-label="Seleccionar ícono PNG cuadrado" style={{ display: "block", maxWidth: "340px", width: "100%", padding: "10px", border: "1px solid #cbd5e1", borderRadius: "8px" }} />
+            <button type="submit" style={{ padding: "14px 20px", minHeight: "48px", borderRadius: "8px", background: "#0d74bc", color: "white", border: 0, cursor: "pointer", fontWeight: "bold" }}>
+              Guardar ícono de la aplicación
             </button>
           </form>
         </details>
