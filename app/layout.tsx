@@ -95,6 +95,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="light bg-background">
       <body className="font-sans antialiased">
+        <link rel="preload" as="image" href="/api/identidad/logo" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
