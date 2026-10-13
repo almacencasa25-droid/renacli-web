@@ -8,7 +8,10 @@ export async function GET() {
   const key = process.env.SUPABASE_SECRET_KEY
   if (!url || !key) return new NextResponse(null, { status: 404 })
   const supabase = createClient(url, key, { auth: { persistSession: false } })
-  const { data, error } = await supabase.storage.from("fotos-matriculados").download("identidad-visual/logo-actual.png")
+  const { data: archivos } = await supabase.storage.from("fotos-matriculados").list("identidad-visual", { limit: 100, sortBy: { column: "name", order: "desc" } })
+  const nuevo = archivos?.find((archivo) => archivo.name.startsWith("logo-") && archivo.name.endsWith(".png") && archivo.name !== "logo-actual.png")
+  const ruta = nuevo ? `identidad-visual/${nuevo.name}` : "identidad-visual/logo-actual.png"
+  const { data, error } = await supabase.storage.from("fotos-matriculados").download(ruta)
   if (error || !data) return new NextResponse(null, { status: 404, headers: { "Cache-Control": "no-store" } })
   return new NextResponse(await data.arrayBuffer(), {
     headers: { "Content-Type": "image/png", "Cache-Control": "no-store, max-age=0", "X-Content-Type-Options": "nosniff" },
