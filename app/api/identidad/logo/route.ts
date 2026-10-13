@@ -11,6 +11,6 @@ export async function GET() {
   const { data, error } = await supabase.storage.from("fotos-matriculados").download("identidad-visual/logo-actual.png")
   if (error || !data) return new NextResponse(null, { status: 404, headers: { "Cache-Control": "no-store" } })
   return new NextResponse(await data.arrayBuffer(), {
-    headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "X-Content-Type-Options": "nosniff" },
+    headers: { "Content-Type": "image/png", "Cache-Control": "no-store, max-age=0", "X-Content-Type-Options": "nosniff" },
   })
 }
