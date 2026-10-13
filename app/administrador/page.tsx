@@ -677,13 +677,13 @@ async function guardarLogoRenacli(formData: FormData) {
   }
   const supabase = obtenerSupabaseAdmin()
   const { error } = await supabase.storage.from("fotos-matriculados").upload(
-    "identidad-visual/logo-actual.png", bytes, { contentType: "image/png", upsert: true, cacheControl: "0" }
+    `identidad-visual/logo-${Date.now()}-${crypto.randomUUID()}.png`, bytes, { contentType: "image/png", upsert: true, cacheControl: "0" }
   )
   if (error) {
     console.error("[RENACLI] Error guardando logo:", error)
     redirect("/administrador?logo_error=subida")
   }
-  redirect("/administrador?logo_guardado=1")
+  redirect(`/administrador?logo_guardado=1&logo_version=${Date.now()}`)
 }
 
 async function guardarConfiguracionPublica(
@@ -2406,7 +2406,7 @@ export default async function AdministradorPage({
           {parametros.logo_guardado === "1" && <Aviso texto="Logo actualizado correctamente." tipo="ok" />}
           {parametros.logo_error && <Aviso texto="No se pudo guardar el logo. Usá un PNG válido de hasta 2 MB." tipo="error" />}
           <div style={{ padding: "12px", background: "#104875", borderRadius: "10px", marginBottom: "14px", display: "inline-block" }}>
-            <img src="/api/identidad/logo" alt="Logo actual RENACLI (si ya fue cargado)" style={{ maxWidth: "300px", maxHeight: "100px", objectFit: "contain" }} />
+            <img src={`/api/identidad/logo?v=${parametros.logo_version || "actual"}`} alt="Logo actual RENACLI (si ya fue cargado)" style={{ maxWidth: "300px", maxHeight: "100px", objectFit: "contain" }} />
           </div>
           <form action={guardarLogoRenacli} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "14px" }}>
             <label htmlFor="archivo-logo-renacli" style={{ display: "inline-flex", padding: "14px 20px", borderRadius: "9px", background: "#e0f2fe", color: "#075985", border: "2px solid #0284c7", cursor: "pointer", fontWeight: 700, minHeight: "48px", alignItems: "center" }}>
