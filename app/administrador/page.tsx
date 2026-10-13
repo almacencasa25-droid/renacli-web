@@ -2408,9 +2408,20 @@ export default async function AdministradorPage({
           <div style={{ padding: "12px", background: "#104875", borderRadius: "10px", marginBottom: "14px", display: "inline-block" }}>
             <img src="/api/identidad/logo" alt="Logo actual RENACLI (si ya fue cargado)" style={{ maxWidth: "300px", maxHeight: "100px", objectFit: "contain" }} />
           </div>
-          <form action={guardarLogoRenacli} encType="multipart/form-data" style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
-            <input name="logo" type="file" accept="image/png" required style={{ maxWidth: "100%" }} />
-            <button type="submit" style={{ padding: "12px 20px", borderRadius: "8px", background: "#0d74bc", color: "white", border: 0, cursor: "pointer", fontWeight: "bold" }}>
+          <form action={guardarLogoRenacli} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "14px" }}>
+            <label htmlFor="archivo-logo-renacli" style={{ display: "inline-flex", padding: "14px 20px", borderRadius: "9px", background: "#e0f2fe", color: "#075985", border: "2px solid #0284c7", cursor: "pointer", fontWeight: 700, minHeight: "48px", alignItems: "center" }}>
+              Seleccionar imagen PNG
+            </label>
+            <input
+              id="archivo-logo-renacli"
+              name="logo"
+              type="file"
+              accept=".png,image/png"
+              required
+              aria-label="Elegir logo PNG de RENACLI"
+              style={{ display: "block", width: "100%", maxWidth: "340px", fontSize: "16px", padding: "10px", border: "1px solid #cbd5e1", borderRadius: "8px", background: "#fff", color: "#172033" }}
+            />
+            <button type="submit" style={{ padding: "14px 20px", minHeight: "48px", borderRadius: "8px", background: "#0d74bc", color: "white", border: 0, cursor: "pointer", fontWeight: "bold" }}>
               Guardar y aplicar logo
             </button>
           </form>
