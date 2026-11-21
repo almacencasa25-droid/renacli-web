@@ -12,6 +12,7 @@ type EstadoEnvio =
 export function FormularioContacto() {
   const [estado, setEstado] =
     useState<EstadoEnvio>("idle")
+  const [motivoSeleccionado, setMotivoSeleccionado] = useState("")
 
   const [
     mensajeEstado,
@@ -59,6 +60,7 @@ export function FormularioContacto() {
       }
 
       formulario.reset()
+      setMotivoSeleccionado("")
 
       setEstado("ok")
 
@@ -176,7 +178,8 @@ export function FormularioContacto() {
               <select
                 name="motivo"
                 required
-                defaultValue=""
+                value={motivoSeleccionado}
+                onChange={(event) => setMotivoSeleccionado(event.target.value)}
                 className="w-full rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground outline-none transition focus:border-primary"
               >
                 <option
@@ -216,6 +219,28 @@ export function FormularioContacto() {
               </select>
             </label>
           </div>
+
+          {motivoSeleccionado === "evaluacion" && (
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-foreground">
+                Número de DNI (obligatorio para la evaluación)
+              </span>
+              <input
+                type="text"
+                name="dni_evaluacion"
+                inputMode="numeric"
+                autoComplete="off"
+                pattern="[0-9]{7,9}"
+                minLength={7}
+                maxLength={9}
+                required
+                title="Ingresá el DNI sin puntos, de 7 a 9 números"
+                placeholder="DNI sin puntos, por ejemplo 30123456"
+                className="w-full rounded-lg border border-input bg-slate-100 px-3 py-3 text-sm text-foreground outline-none transition focus:border-primary"
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">Se utilizará para identificarte y habilitar tu evaluación. No se mostrará públicamente.</span>
+            </label>
+          )}
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-foreground">
