@@ -16,6 +16,7 @@ type MatriculadoEvaluacion = {
 type TramiteEvaluacion = {
   id: number
   numero_tramite: string | null
+  dni_evaluacion: string | null
   nombre: string
   email: string
   telefono: string | null
@@ -395,6 +396,7 @@ async function buscarTramites(
         `
           id,
           numero_tramite,
+          dni_evaluacion,
           nombre,
           email,
           telefono,
@@ -739,6 +741,7 @@ async function generarEvaluacion(
         `
           id,
           numero_tramite,
+          dni_evaluacion,
           nombre,
           email,
           telefono,
@@ -1338,6 +1341,17 @@ async function generarEvaluacion(
             evaluacionId,
           codigo:
             codigoCreado,
+        }
+
+        // El DNI se copia desde la consulta original; la habilitación continúa siendo manual.
+        if (tramiteOrigen?.dni_evaluacion) {
+          const { error: errorDni } = await supabase
+            .from("evaluaciones")
+            .update({ dni_acceso_online: tramiteOrigen.dni_evaluacion })
+            .eq("id", evaluacionId)
+          if (errorDni) {
+            console.error("[RENACLI] No se pudo asociar DNI a evaluación:", errorDni)
+          }
         }
 
         break
@@ -2140,6 +2154,7 @@ export default async function EvaluacionesPage({
                             {tramite.motivo}
                             {" · "}
                             {tramite.estado}
+                            {tramite.dni_evaluacion ? ` · DNI ${tramite.dni_evaluacion}` : ""}
                             {tramite.email
                               ? ` · ${tramite.email}`
                               : ""}
