@@ -2716,6 +2716,28 @@ export default async function EvaluacionesPage({
                               : "Corregir"}
                           </a>
 
+                          <a
+                            href={`/administrador/evaluaciones/${encodeURIComponent(
+                              evaluacion.codigo
+                            )}/online`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "12px 17px",
+                              borderRadius: "9px",
+                              background: "#0d4f7c",
+                              color: "#ffffff",
+                              fontWeight: "bold",
+                              fontSize: "15px",
+                              textDecoration: "none",
+                              textAlign: "center",
+                              whiteSpace: "normal",
+                            }}
+                          >
+                            Habilitar evaluación online
+                          </a>
+
                           {!finalizada &&
                             evaluacion.matriculado_id ===
                               null && (
