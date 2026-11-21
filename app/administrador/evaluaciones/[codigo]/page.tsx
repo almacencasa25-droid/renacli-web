@@ -893,6 +893,12 @@ export default async function EvaluacionDetallePage({
           </div>
         </div>
 
+        <div style={{ marginTop: "22px", padding: "18px", background: "#e0f2fe", border: "1px solid #0284c7", borderRadius: "12px" }}>
+          <strong>Evaluación online para celular</strong>
+          <p style={{ margin: "8px 0" }}>Configurá DNI de ingreso, cantidad de intentos y habilitación desde el administrador.</p>
+          <a href={`/administrador/evaluaciones/${encodeURIComponent(codigo)}/online`} style={{ display: "inline-block", background: "#0d4f7c", color: "white", padding: "12px 16px", borderRadius: "8px", textDecoration: "none", fontWeight: "bold" }}>Configurar evaluación online e intentos</a>
+        </div>
+
         {estaFinalizada && (
           <div
             style={{
