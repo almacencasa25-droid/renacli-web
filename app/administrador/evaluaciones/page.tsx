@@ -1500,13 +1500,14 @@ async function eliminarEvaluacion(
       .toLowerCase()
 
   /*
-   * Solo permitimos borrar evaluaciones todavía no finalizadas
-   * y que no pertenezcan a un técnico ya matriculado.
+   * Las evaluaciones de prueba pueden borrarse incluso después de
+   * corregirse, pero nunca si pertenecen a un matriculado.
    */
   if (
     ![
       "generada",
       "descargada",
+      "finalizada",
     ].includes(estado) ||
     evaluacion.matriculado_id !==
       null
@@ -2738,8 +2739,7 @@ export default async function EvaluacionesPage({
                             Habilitar evaluación online
                           </a>
 
-                          {!finalizada &&
-                            evaluacion.matriculado_id ===
+                          {evaluacion.matriculado_id ===
                               null && (
                             <a
                               href={rutaEvaluacionesCon(
@@ -2756,8 +2756,7 @@ export default async function EvaluacionesPage({
                         </div>
                       </div>
 
-                      {!finalizada &&
-                        evaluacion.matriculado_id ===
+                      {evaluacion.matriculado_id ===
                           null &&
                         eliminarId ===
                           evaluacion.id &&
@@ -2834,8 +2833,7 @@ export default async function EvaluacionesPage({
                         </div>
                       )}
 
-                      {!finalizada &&
-                        evaluacion.matriculado_id ===
+                      {evaluacion.matriculado_id ===
                           null &&
                         confirmarEliminarId ===
                           evaluacion.id && (
