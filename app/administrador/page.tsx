@@ -4482,28 +4482,28 @@ export default async function AdministradorPage({
 
                     <a
                       href="/administrador?buscar=1"
-                      style={botonBlanco}
+                      style={{ ...botonBlanco, background: "#16803d", color: "#ffffff", border: "1px solid #16803d", boxShadow: "0 3px 8px rgba(15, 23, 42, 0.15)", borderRadius: "10px" }}
                     >
                       Buscar matriculado
                     </a>
 
                     <a
                       href="/administrador/comunicaciones"
-                      style={botonBlanco}
+                      style={{ ...botonBlanco, background: "#c96709", color: "#ffffff", border: "1px solid #c96709", boxShadow: "0 3px 8px rgba(15, 23, 42, 0.15)", borderRadius: "10px" }}
                     >
                       Comunicaciones y calificaciones
                     </a>
 
                     <a
                       href="/administrador/evaluaciones"
-                      style={botonBlanco}
+                      style={{ ...botonBlanco, background: "#7135b9", color: "#ffffff", border: "1px solid #7135b9", boxShadow: "0 3px 8px rgba(15, 23, 42, 0.15)", borderRadius: "10px" }}
                     >
                       Evaluaciones RENACLI
                     </a>
 
                     <a
                       href="/administrador/respuestas-automaticas"
-                      style={botonBlanco}
+                      style={{ ...botonBlanco, background: "#087f88", color: "#ffffff", border: "1px solid #087f88", boxShadow: "0 3px 8px rgba(15, 23, 42, 0.15)", borderRadius: "10px" }}
                     >
                       Respuestas automáticas
                     </a>
