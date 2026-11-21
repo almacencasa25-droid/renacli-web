@@ -116,6 +116,8 @@ export async function POST(
         80,
       )
 
+    const dniEvaluacion = textoSeguro(formData.get("dni_evaluacion"), 24)
+
     const mensaje =
       textoSeguro(
         formData.get("mensaje"),
@@ -190,6 +192,10 @@ export async function POST(
       )
     }
 
+    if (motivo === "evaluacion" && !/^[0-9]{7,9}$/.test(dniEvaluacion)) {
+      return NextResponse.json({ error: "Ingresá el DNI sin puntos, de 7 a 9 números, para solicitar la evaluación." }, { status: 400 })
+    }
+
     const supabase =
       createClient(
         supabaseUrl,
@@ -226,6 +232,7 @@ export async function POST(
             telefono || null,
           motivo,
           mensaje,
+          dni_evaluacion: motivo === "evaluacion" ? dniEvaluacion : null,
           estado:
             "pendiente",
           numero_tramite:
