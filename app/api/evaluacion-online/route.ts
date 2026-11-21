@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Respondé todas las preguntas antes de finalizar." }, { status: 400, headers: noCache })
         throw error
       }
-      return NextResponse.json({ terminado: true, ...data }, { headers: noCache })
+      return NextResponse.json({ terminado: true, ...data, usados: data.intento, maximos: data.intento + data.restantes }, { headers: noCache })
     }
     return NextResponse.json({ error: "Acción inválida." }, { status: 400, headers: noCache })
   } catch (error) { console.error("Evaluacion online POST", error); return NextResponse.json({ error: "No se pudo procesar la evaluación." }, { status: 500, headers: noCache }) }
