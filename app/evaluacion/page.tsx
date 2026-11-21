@@ -52,7 +52,7 @@ export default function EvaluacionOnlinePage() {
         <h2 className={"text-2xl font-bold " + (estado.aprobado ? "text-green-700" : "text-red-700")}>{estado.aprobado ? "APROBADO" : "NO APROBADO"}</h2>
         <p className="mt-4 text-lg">Calificación: <strong>{estado.porcentaje ?? 0}%</strong></p>
         <p className="mt-2 text-sm">Intentos utilizados: {estado.usados ?? "—"} de {estado.maximos ?? "—"}</p>
-        <p className="mt-4 text-slate-600">Para consultar tu resultado o solicitar otra oportunidad, comunicate con RENACLI.</p>
+        {!estado.aprobado && Number(estado.restantes ?? 0) > 0 ? <button type="button" onClick={() => { setError(""); setRespuestas({}); setIndice(0); fetch(base, { cache: "no-store" }).then(async response => { if (!response.ok) throw new Error("No se pudo cargar el próximo intento."); setEstado(await response.json()) }).catch(e => setError(e.message)) }} className="mt-5 w-full rounded-lg bg-[#0d4f7c] p-4 font-bold text-white">Realizar otro intento ({estado.restantes} disponibles)</button> : <p className="mt-4 text-slate-600">Para consultar tu resultado o solicitar otra oportunidad, comunicate con RENACLI.</p>}
       </section> : <section className={bloque}>
         <div className="flex items-center justify-between gap-3 text-sm text-slate-600"><span>Evaluación de {estado.nombre || "aspirante"}</span><span>Intento {(estado.usados || 0) + 1} de {estado.maximos}</span></div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-cyan-600" style={{ width: (preguntas.length ? respondidas / preguntas.length * 100 : 0) + "%" }}/></div>
