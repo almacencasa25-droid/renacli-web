@@ -31,7 +31,7 @@ export function ConservarPosicionEvaluaciones() {
     // hidratación de Next.js. No se utiliza desplazamiento suave.
     const primerFrame = window.requestAnimationFrame(() => {
       const segundoFrame = window.requestAnimationFrame(() => {
-        window.scrollTo({ top: posicion, behavior: "instant" })
+        window.scrollTo({ top: posicion, behavior: "auto" })
         restaurando = false
       })
       pendiente = segundoFrame
