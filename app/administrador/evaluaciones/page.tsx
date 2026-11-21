@@ -1501,17 +1501,15 @@ async function eliminarEvaluacion(
       .toLowerCase()
 
   /*
-   * Las evaluaciones de prueba pueden borrarse incluso después de
-   * corregirse, pero nunca si pertenecen a un matriculado.
+   * Evaluaciones de cualquier estado pueden eliminarse.
+   * Conservamos la protección de las utilizadas para acreditar matrículas.
    */
   if (
     ![
       "generada",
       "descargada",
       "finalizada",
-    ].includes(estado) ||
-    evaluacion.matriculado_id !==
-      null
+    ].includes(estado)
   ) {
     redirect(
       rutaConParametro(
@@ -2741,9 +2739,7 @@ export default async function EvaluacionesPage({
                             Habilitar evaluación online
                           </a>
 
-                          {evaluacion.matriculado_id ===
-                              null && (
-                            <a
+                          <a
                               href={rutaEvaluacionesCon(
                                 "eliminar",
                                 evaluacion.id
@@ -2754,13 +2750,10 @@ export default async function EvaluacionesPage({
                             >
                               Eliminar evaluación
                             </a>
-                          )}
                         </div>
                       </div>
 
-                      {evaluacion.matriculado_id ===
-                          null &&
-                        eliminarId ===
+                      {eliminarId ===
                           evaluacion.id &&
                         confirmarEliminarId !==
                           evaluacion.id && (
@@ -2796,7 +2789,7 @@ export default async function EvaluacionesPage({
                             <strong>
                               {evaluacion.codigo}
                             </strong>
-                            . Si fue generada por error o está duplicada, podés continuar. Una vez eliminada no podrá recuperarse.
+                            . Si fue generada por error o está duplicada, podés continuar. Una vez eliminada no podrá recuperarse. Las evaluaciones usadas como acreditación de ingreso de una matrícula están protegidas.
                           </p>
 
                           <div
@@ -2835,9 +2828,7 @@ export default async function EvaluacionesPage({
                         </div>
                       )}
 
-                      {evaluacion.matriculado_id ===
-                          null &&
-                        confirmarEliminarId ===
+                      {confirmarEliminarId ===
                           evaluacion.id && (
                         <div
                           style={{
