@@ -2,6 +2,7 @@ import crypto from "crypto"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
+import { ConservarPosicionEvaluaciones } from "./conservar-posicion"
 
 const COOKIE_NAME = "renacli_admin_session"
 
@@ -1744,6 +1745,7 @@ export default async function EvaluacionesPage({
           "Arial, sans-serif",
       }}
     >
+      <ConservarPosicionEvaluaciones />
       <header
         style={{
           background: "#0d4f7c",
