@@ -43,28 +43,14 @@ function normalizeTramite(tramite: unknown) {
 }
 const noCache = { "Cache-Control": "no-store" }
 async function state(id: number) {
-  const supabase = db()
-  const { data: evalData, error } = await supabase.from("evaluaciones")
-    .select("id,codigo,apellido_nombre_snapshot,estado,aprobado,porcentaje,online_habilitada,intentos_maximos,total_preguntas")
-    .eq("id", id).maybeSingle()
-  if (error || !evalData || !evalData.online_habilitada) return null
-  const { count, error: countError } = await supabase.from("evaluacion_intentos_online")
-    .select("id", { head: true, count: "exact" }).eq("evaluacion_id", id)
-  if (countError) throw countError
-  const usados = count ?? 0
-  const terminado = usados >= evalData.intentos_maximos || (evalData.aprobado === true && evalData.estado === "finalizada")
-  if (terminado) {
-    return { terminado: true, aprobado: evalData.aprobado, porcentaje: evalData.porcentaje, usados, maximos: evalData.intentos_maximos, nombre: evalData.apellido_nombre_snapshot }
+  const { data, error } = await db().rpc("preparar_intento_evaluacion_online", {
+    p_evaluacion_id: id,
+  })
+  if (error) {
+    if (/EVALUACION_NO_DISPONIBLE/.test(error.message || "")) return null
+    throw error
   }
-  const { data: items, error: itemsError } = await supabase.from("evaluacion_items")
-    .select("id,orden,enunciado_snapshot,opcion_a_snapshot,opcion_b_snapshot,opcion_c_snapshot,opcion_d_snapshot")
-    .eq("evaluacion_id", id).order("orden", { ascending: true })
-  if (itemsError || !items?.length || items.length !== evalData.total_preguntas) throw new Error("Preguntas incompletas")
-  return { terminado: false, nombre: evalData.apellido_nombre_snapshot, usados, maximos: evalData.intentos_maximos,
-    preguntas: items.map(item => ({ id: item.id, enunciado: item.enunciado_snapshot, opciones: [
-      { letra: "A", texto: item.opcion_a_snapshot }, { letra: "B", texto: item.opcion_b_snapshot },
-      { letra: "C", texto: item.opcion_c_snapshot }, { letra: "D", texto: item.opcion_d_snapshot }
-    ] })) }
+  return data
 }
 export async function GET(request: NextRequest) {
   const id = session(request)
