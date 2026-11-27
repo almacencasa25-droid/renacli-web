@@ -410,7 +410,7 @@ export function SeguimientoTramite() {
         setMensajes([])
         setDocumentos([])
         setCerrado(false)
-        setNumeroTramite("")
+        setNumeroTramite(new URLSearchParams(window.location.search).get("numero") || "")
         setEmail("")
         setTextoMensaje("")
         setArchivos([])
@@ -776,6 +776,14 @@ export function SeguimientoTramite() {
           </div>
         </div>
 
+        {numeroTramite && (
+          <div role="status" className="mt-5 rounded-xl border border-green-300 bg-green-50 p-4 text-sm text-green-900">
+            <p className="font-bold">Continuá tu comunicación con RENACLI</p>
+            <p className="mt-2">Para continuar con el chat de RENACLI, ingresá el mismo correo electrónico que utilizaste al iniciar tu trámite. Allí podrás leer nuestras respuestas y enviar mensajes.</p>
+            <p className="mt-2">Guardá tu número de trámite para volver a consultar nuestras respuestas cuando quieras.</p>
+          </div>
+        )}
+
         <form
           onSubmit={ingresar}
           className="mt-6 space-y-4"
@@ -829,7 +837,7 @@ export function SeguimientoTramite() {
 
             {ingresando
               ? "Ingresando..."
-              : "Consultar trámite"}
+              : "Acceder al chat de mi trámite"}
           </button>
 
           {error ? (
