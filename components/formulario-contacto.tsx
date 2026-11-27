@@ -62,6 +62,11 @@ export function FormularioContacto() {
       formulario.reset()
       setMotivoSeleccionado("")
 
+      if (resultado?.numeroTramite) {
+        window.location.assign("/tramite?numero=" + encodeURIComponent(resultado.numeroTramite))
+        return
+      }
+
       setEstado("ok")
 
       setNumeroTramite(
