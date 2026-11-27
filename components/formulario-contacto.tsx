@@ -39,6 +39,9 @@ export function FormularioContacto() {
     setMensajeEstado("")
     setNumeroTramite("")
 
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 25000)
+
     try {
       const respuesta =
         await fetch(
@@ -46,6 +49,7 @@ export function FormularioContacto() {
           {
             method: "POST",
             body: datos,
+            signal: controller.signal,
           },
         )
 
@@ -62,11 +66,6 @@ export function FormularioContacto() {
       formulario.reset()
       setMotivoSeleccionado("")
 
-      if (resultado?.numeroTramite) {
-        window.location.assign("/tramite?numero=" + encodeURIComponent(resultado.numeroTramite))
-        return
-      }
-
       setEstado("ok")
 
       setNumeroTramite(
@@ -77,14 +76,23 @@ export function FormularioContacto() {
       setMensajeEstado(
         "Tu consulta fue enviada correctamente. Guardá el número de trámite para realizar el seguimiento.",
       )
+      if (resultado?.numeroTramite) {
+        window.setTimeout(() => {
+          window.location.assign("/tramite?numero=" + encodeURIComponent(resultado.numeroTramite))
+        }, 800)
+      }
     } catch (error) {
       setEstado("error")
 
       setMensajeEstado(
-        error instanceof Error
+        controller.signal.aborted
+          ? "El servidor tardó demasiado en responder. No vuelvas a enviar sin verificar si RENACLI recibió tu consulta."
+          : error instanceof Error
           ? error.message
           : "No se pudo enviar la consulta.",
       )
+    } finally {
+      window.clearTimeout(timeout)
     }
   }
 
@@ -268,7 +276,7 @@ export function FormularioContacto() {
               type="submit"
               disabled={
                 estado ===
-                "enviando"
+                "enviando" || estado === "ok"
               }
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -313,6 +321,7 @@ export function FormularioContacto() {
                     el estado del trámite y
                     continuar el seguimiento.
                   </p>
+                  <a href={"/tramite?numero=" + encodeURIComponent(numeroTramite)} className="mt-3 inline-flex rounded-lg bg-green-800 px-4 py-3 text-sm font-bold text-white">Continuar al chat de RENACLI</a>
                 </div>
               ) : null}
             </div>
